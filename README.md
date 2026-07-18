@@ -1,9 +1,10 @@
 # FM-Scheduling — a benchmark for technician-constrained building-maintenance work-order scheduling
 
-Preprint can be accessed here: http://dx.doi.org/10.2139/ssrn.7095162
 Companion repository for the manuscript *"When Does Learned Dispatching Beat
 Priority Rules? An Open Benchmark for Technician-Constrained
 Maintenance Work-Order Scheduling in Building Portfolios"* (under peer review).
+
+Preprint can be accessed here: http://dx.doi.org/10.2139/ssrn.7095162
 
 It contains, for reuse and verification:
 
