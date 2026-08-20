@@ -1,0 +1,996 @@
+{
+  "dataset": {
+    "elapsed_seconds": 4161.03,
+    "n_clusters": 527,
+    "n_clusters_verdict": 180,
+    "n_configs": 887,
+    "n_configs_empirical": 587,
+    "n_configs_generator": 300,
+    "n_configs_rolling": 160,
+    "n_configs_stress": 17,
+    "n_configs_transfer": 30,
+    "n_configs_verdict": 540,
+    "n_errors": 0,
+    "n_infeasible": 0,
+    "n_methods": 31,
+    "n_policy_seeds_attn": 10,
+    "n_policy_seeds_v2": 10,
+    "n_rows": 26770,
+    "rolling_budget_s": 2,
+    "rolling_per_cell": 8
+  },
+  "empirical_ubin": {
+    "u_bin=0.5-0.8": {
+      "best_method": "v2rl303",
+      "lpt_in_set": 0,
+      "mean_best": 686.4705381578948,
+      "n_clusters": 103,
+      "n_configs": 152,
+      "n_full_coverage_methods": 30,
+      "random_in_set": 0,
+      "set_is_complete": false,
+      "set_members": [
+        "v2rl303",
+        "rl301",
+        "v2at302",
+        "v2rl305",
+        "v2rl306",
+        "v2rl310",
+        "v2rl301",
+        "v2rl302",
+        "v2rl308",
+        "v2rl307",
+        "rl302",
+        "v2at310",
+        "edd",
+        "pfifo",
+        "rl303",
+        "v2rl304",
+        "v2rl309",
+        "v2at305",
+        "v2at309",
+        "wmdd",
+        "v2at306"
+      ],
+      "set_size": 21,
+      "set_statement": "EDD, PFIFO and WMDD, all ten policy seeds, five of the ten attention seeds, and all three first-curriculum seeds"
+    },
+    "u_bin=0.8-1.0": {
+      "best_method": "v2rl305",
+      "lpt_in_set": 0,
+      "mean_best": 622.246240625,
+      "n_clusters": 64,
+      "n_configs": 64,
+      "n_full_coverage_methods": 30,
+      "random_in_set": 0,
+      "set_is_complete": false,
+      "set_members": [
+        "v2rl305",
+        "v2rl302",
+        "v2rl301",
+        "v2rl307",
+        "v2at302",
+        "v2rl303",
+        "rl302",
+        "rl303",
+        "rl301",
+        "v2rl310",
+        "v2at310",
+        "v2rl308",
+        "v2rl304"
+      ],
+      "set_size": 13,
+      "set_statement": "eight of the ten policy seeds, two of the ten attention seeds, and all three first-curriculum seeds"
+    },
+    "u_bin=1.0-1.2": {
+      "best_method": "v2rl304",
+      "lpt_in_set": 0,
+      "mean_best": 605.007491891892,
+      "n_clusters": 37,
+      "n_configs": 37,
+      "n_full_coverage_methods": 30,
+      "random_in_set": 0,
+      "set_is_complete": false,
+      "set_members": [
+        "v2rl304"
+      ],
+      "set_size": 1,
+      "set_statement": "one of the ten policy seeds"
+    },
+    "u_bin=<0.5": {
+      "best_method": "rl302",
+      "lpt_in_set": 1,
+      "mean_best": 248.96509444444447,
+      "n_clusters": 85,
+      "n_configs": 180,
+      "n_full_coverage_methods": 30,
+      "random_in_set": 1,
+      "set_is_complete": false,
+      "set_members": [
+        "rl302",
+        "v2rl302",
+        "v2rl310",
+        "v2at302",
+        "v2rl303",
+        "v2rl305",
+        "v2at305",
+        "v2rl307",
+        "rl301",
+        "v2rl301",
+        "v2rl308",
+        "edd",
+        "pfifo",
+        "v2rl304",
+        "v2at310",
+        "v2rl309",
+        "rl303",
+        "v2rl306",
+        "lpt",
+        "v2at309",
+        "wmdd",
+        "atc",
+        "v2at307",
+        "v2at306",
+        "v2at308",
+        "v2at304",
+        "v2at303",
+        "random",
+        "v2at301"
+      ],
+      "set_size": 29,
+      "set_statement": "EDD, PFIFO, ATC, WMDD, LPT and random, all ten policy seeds, all ten attention seeds, and all three first-curriculum seeds"
+    },
+    "u_bin=>=1.2": {
+      "best_method": "rl301",
+      "lpt_in_set": 0,
+      "mean_best": 278.4336373831776,
+      "n_clusters": 53,
+      "n_configs": 107,
+      "n_full_coverage_methods": 30,
+      "random_in_set": 0,
+      "set_is_complete": false,
+      "set_members": [
+        "rl301",
+        "v2rl307",
+        "v2rl302",
+        "v2at302",
+        "v2rl305",
+        "v2rl301",
+        "v2rl304",
+        "v2at310",
+        "v2rl310",
+        "rl303",
+        "v2rl308",
+        "rl302"
+      ],
+      "set_size": 12,
+      "set_statement": "seven of the ten policy seeds, two of the ten attention seeds, and all three first-curriculum seeds"
+    }
+  },
+  "empirical_verdict": {
+    "m=0.6": {
+      "atc_in_set": 0,
+      "atc_pct_from_best": 1.4837365375379414,
+      "atc_verdict": "inconclusive",
+      "best_method": "rl301",
+      "edd_in_set": 1,
+      "edd_pct_from_best": 0.4327634072742486,
+      "mean_best": 449.76718111111114,
+      "n_clusters": 180,
+      "n_configs": 180,
+      "policy_pool_mean": 451.31821499999995,
+      "policy_pool_vs_best_ci": [
+        0.5616835888888935,
+        2.8050814750000126
+      ],
+      "policy_pool_vs_best_diff": 1.551033888888895,
+      "policy_pool_vs_best_verdict": "equivalent",
+      "policy_pool_vs_edd_ci": [
+        -1.746209855555552,
+        1.0218538833333284
+      ],
+      "policy_pool_vs_edd_diff": -0.3953938888888819,
+      "policy_pool_vs_edd_verdict": "equivalent",
+      "policy_seed_spread_pct": 0.8138817250917363,
+      "policy_seeds_in_set": 8,
+      "rolling_vs_edd_ci": [
+        -1.9964078124999853,
+        0.3929163541666664
+      ],
+      "rolling_vs_edd_diff": -0.6512708333333269,
+      "rolling_vs_edd_n": 48,
+      "rolling_vs_edd_verdict": "equivalent",
+      "set_members": [
+        "rl301",
+        "v2rl302",
+        "v2rl303",
+        "v2rl310",
+        "v2rl305",
+        "v2rl304",
+        "v2at302",
+        "v2rl308",
+        "v2rl307",
+        "rl302",
+        "v2at310",
+        "v2rl301",
+        "rl303",
+        "edd",
+        "pfifo"
+      ],
+      "set_size": 15,
+      "set_statement": "EDD and PFIFO, eight of the ten policy seeds, two of the ten attention seeds, and all three first-curriculum seeds",
+      "wmdd_in_set": 0,
+      "wmdd_pct_from_best": 1.1820562580793674,
+      "wmdd_verdict": "inconclusive"
+    },
+    "m=0.8": {
+      "atc_in_set": 1,
+      "atc_pct_from_best": 0.4375829527283344,
+      "atc_verdict": "equivalent",
+      "best_method": "rl301",
+      "edd_in_set": 1,
+      "edd_pct_from_best": 0.09461333791536143,
+      "mean_best": 446.2138077777778,
+      "n_clusters": 180,
+      "n_configs": 180,
+      "policy_pool_mean": 446.4898628888889,
+      "policy_pool_vs_best_ci": [
+        -0.16616667222221757,
+        0.9032608499999951
+      ],
+      "policy_pool_vs_best_diff": 0.27605511111111114,
+      "policy_pool_vs_best_verdict": "equivalent",
+      "policy_pool_vs_edd_ci": [
+        -0.5080279944444414,
+        0.27441538888889094
+      ],
+      "policy_pool_vs_edd_diff": -0.1461226666666645,
+      "policy_pool_vs_edd_verdict": "equivalent",
+      "policy_seed_spread_pct": 0.19189874722815858,
+      "policy_seeds_in_set": 10,
+      "rolling_vs_edd_ci": [
+        -1.33013729166667,
+        0.06076729166666382
+      ],
+      "rolling_vs_edd_diff": -0.5109166666666655,
+      "rolling_vs_edd_n": 48,
+      "rolling_vs_edd_verdict": "equivalent",
+      "set_members": [
+        "rl301",
+        "v2at302",
+        "v2rl301",
+        "v2rl307",
+        "v2rl305",
+        "rl302",
+        "v2rl303",
+        "v2rl302",
+        "v2rl310",
+        "v2rl308",
+        "rl303",
+        "v2rl304",
+        "pfifo",
+        "edd",
+        "v2at305",
+        "v2at310",
+        "v2rl306",
+        "v2rl309",
+        "v2at309",
+        "wmdd",
+        "v2at308",
+        "v2at306",
+        "v2at304",
+        "v2at307",
+        "atc",
+        "v2at303"
+      ],
+      "set_size": 26,
+      "set_statement": "EDD, PFIFO, ATC and WMDD, all ten policy seeds, nine of the ten attention seeds, and all three first-curriculum seeds",
+      "wmdd_in_set": 1,
+      "wmdd_pct_from_best": 0.2987045868770739,
+      "wmdd_verdict": "equivalent"
+    },
+    "m=1.0": {
+      "atc_in_set": 1,
+      "atc_pct_from_best": 0.1965753653901884,
+      "atc_verdict": "equivalent",
+      "best_method": "v2rl302",
+      "edd_in_set": 1,
+      "edd_pct_from_best": 0.042257506857323886,
+      "mean_best": 444.68101666666666,
+      "n_clusters": 180,
+      "n_configs": 180,
+      "policy_pool_mean": 444.7692744444445,
+      "policy_pool_vs_best_ci": [
+        0.021393400000005086,
+        0.18448377222222698
+      ],
+      "policy_pool_vs_best_diff": 0.08825777777778258,
+      "policy_pool_vs_best_verdict": "equivalent",
+      "policy_pool_vs_edd_ci": [
+        -0.26032747777777454,
+        0.024417238888889668
+      ],
+      "policy_pool_vs_edd_diff": -0.09965333333333001,
+      "policy_pool_vs_edd_verdict": "equivalent",
+      "policy_seed_spread_pct": 0.06117543707955253,
+      "policy_seeds_in_set": 10,
+      "rolling_vs_edd_ci": [
+        -0.1450474999999873,
+        0.05329395833337911
+      ],
+      "rolling_vs_edd_diff": -0.019595833333321266,
+      "rolling_vs_edd_n": 48,
+      "rolling_vs_edd_verdict": "equivalent",
+      "set_members": [
+        "v2rl302",
+        "v2rl308",
+        "v2rl310",
+        "v2at302",
+        "v2rl303",
+        "v2rl301",
+        "v2rl305",
+        "v2rl304",
+        "rl301",
+        "rl302",
+        "v2at310",
+        "v2rl307",
+        "v2rl306",
+        "pfifo",
+        "edd",
+        "v2at305",
+        "rl303",
+        "v2rl309",
+        "v2at309",
+        "v2at308",
+        "v2at307",
+        "wmdd",
+        "v2at306",
+        "atc",
+        "lpt",
+        "v2at303",
+        "v2at304",
+        "v2at301",
+        "random",
+        "wspt"
+      ],
+      "set_size": 30,
+      "set_statement": "every transparent rule, all ten policy seeds, all ten attention seeds, and all three first-curriculum seeds",
+      "wmdd_in_set": 1,
+      "wmdd_pct_from_best": 0.14639107785913597,
+      "wmdd_verdict": "equivalent"
+    }
+  },
+  "generator": {
+    "u_target=0.7": {
+      "atc_in_set": 1,
+      "atc_mean": 2258.7456566666665,
+      "atc_pct_from_best": 0.055190999831718206,
+      "atc_ratio_to_best": 1.0005519099983171,
+      "best_method": "rl301",
+      "edd_in_set": 1,
+      "edd_mean": 2258.26579,
+      "edd_pct_from_best": 0.03393444496195429,
+      "edd_ratio_to_best": 1.0003393444496196,
+      "lpt_in_set": 0,
+      "lpt_mean": 2574.50371,
+      "lpt_pct_from_best": 14.042260434920436,
+      "lpt_ratio_to_best": 1.1404226043492043,
+      "mean_best": 2257.4997200000003,
+      "n_clusters": 60,
+      "n_configs": 60,
+      "policy_pool_mean": 2258.038578333333,
+      "policy_pool_vs_best_diff": 0.5388583333332585,
+      "policy_pool_vs_best_pct": 0.02386969657445886,
+      "policy_pool_vs_best_verdict": "equivalent",
+      "policy_pool_vs_edd_pct": -0.010061334129613436,
+      "policy_seed_max_mean": 2259.7019233333335,
+      "policy_seed_min_mean": 2257.5426033333333,
+      "policy_seed_spread_pct": 0.0956491362250178,
+      "policy_seeds_in_set": 10,
+      "random_in_set": 0,
+      "random_mean": 2304.052563333333,
+      "random_pct_from_best": 2.0621417101807182,
+      "random_ratio_to_best": 1.020621417101807,
+      "set_members": [
+        "rl301",
+        "v2rl307",
+        "v2at302",
+        "v2rl301",
+        "v2rl302",
+        "v2rl304",
+        "v2rl310",
+        "v2rl306",
+        "v2rl305",
+        "v2rl308",
+        "edd",
+        "pfifo",
+        "v2at310",
+        "v2rl309",
+        "atc",
+        "v2at307",
+        "v2at309",
+        "wmdd",
+        "v2rl303",
+        "rl303",
+        "v2at303",
+        "v2at308",
+        "v2at306",
+        "rl302",
+        "v2at304",
+        "v2at305",
+        "wspt"
+      ],
+      "set_size": 27,
+      "set_statement": "EDD, PFIFO, WSPT, ATC and WMDD, all ten policy seeds, nine of the ten attention seeds, and all three first-curriculum seeds",
+      "wmdd_in_set": 1,
+      "wmdd_mean": 2259.15484,
+      "wmdd_pct_from_best": 0.07331650964722587,
+      "wmdd_ratio_to_best": 1.0007331650964724,
+      "wspt_in_set": 1,
+      "wspt_mean": 2269.0487866666667,
+      "wspt_pct_from_best": 0.5115866267600899,
+      "wspt_ratio_to_best": 1.005115866267601
+    },
+    "u_target=0.9": {
+      "atc_in_set": 0,
+      "atc_mean": 3011.75496,
+      "atc_pct_from_best": 0.7173045579116445,
+      "atc_ratio_to_best": 1.0071730455791164,
+      "best_method": "v2at302",
+      "edd_in_set": 1,
+      "edd_mean": 3000.471016666667,
+      "edd_pct_from_best": 0.339953686937217,
+      "edd_ratio_to_best": 1.0033995368693722,
+      "lpt_in_set": 0,
+      "lpt_mean": 16524.004736666666,
+      "lpt_pct_from_best": 452.5858642826743,
+      "lpt_ratio_to_best": 5.525858642826742,
+      "mean_best": 2990.305363333334,
+      "n_clusters": 60,
+      "n_configs": 60,
+      "policy_pool_mean": 3006.350402,
+      "policy_pool_vs_best_diff": 16.045038666666365,
+      "policy_pool_vs_best_pct": 0.5365685679933618,
+      "policy_pool_vs_best_verdict": "equivalent",
+      "policy_pool_vs_edd_pct": 0.1959487460693755,
+      "policy_seed_max_mean": 3065.29547,
+      "policy_seed_min_mean": 2990.81525,
+      "policy_seed_spread_pct": 2.490298255634471,
+      "policy_seeds_in_set": 8,
+      "random_in_set": 0,
+      "random_mean": 4924.664566666667,
+      "random_pct_from_best": 64.68768130011568,
+      "random_ratio_to_best": 1.6468768130011568,
+      "set_members": [
+        "v2at302",
+        "v2rl301",
+        "v2rl310",
+        "rl301",
+        "v2rl305",
+        "v2rl302",
+        "v2rl306",
+        "v2rl307",
+        "v2rl308",
+        "v2rl304",
+        "edd",
+        "pfifo",
+        "v2at310",
+        "v2at307",
+        "wmdd"
+      ],
+      "set_size": 15,
+      "set_statement": "EDD, PFIFO and WMDD, eight of the ten policy seeds, three of the ten attention seeds, and one of the three first-curriculum seeds",
+      "wmdd_in_set": 1,
+      "wmdd_mean": 3008.9209299999998,
+      "wmdd_pct_from_best": 0.622530624963161,
+      "wmdd_ratio_to_best": 1.0062253062496316,
+      "wspt_in_set": 0,
+      "wspt_mean": 3214.837606666667,
+      "wspt_pct_from_best": 7.508672729096936,
+      "wspt_ratio_to_best": 1.0750867272909694
+    },
+    "u_target=1.0": {
+      "atc_in_set": 0,
+      "atc_mean": 3141.090583333333,
+      "atc_pct_from_best": 1.172107605577479,
+      "atc_ratio_to_best": 1.0117210760557749,
+      "best_method": "rl301",
+      "edd_in_set": 1,
+      "edd_mean": 3120.22592,
+      "edd_pct_from_best": 0.5000728749922738,
+      "edd_ratio_to_best": 1.0050007287499227,
+      "lpt_in_set": 0,
+      "lpt_mean": 29770.909659999998,
+      "lpt_pct_from_best": 858.8980628636056,
+      "lpt_ratio_to_best": 9.588980628636055,
+      "mean_best": 3104.700156666667,
+      "n_clusters": 60,
+      "n_configs": 60,
+      "policy_pool_mean": 3143.022665666667,
+      "policy_pool_vs_best_diff": 38.32250899999963,
+      "policy_pool_vs_best_pct": 1.2343384889426565,
+      "policy_pool_vs_best_verdict": "inconclusive",
+      "policy_pool_vs_edd_pct": 0.7306120214098698,
+      "policy_seed_max_mean": 3276.3831999999998,
+      "policy_seed_min_mean": 3108.184146666667,
+      "policy_seed_spread_pct": 5.411489326130048,
+      "policy_seeds_in_set": 8,
+      "random_in_set": 0,
+      "random_mean": 8149.989089999999,
+      "random_pct_from_best": 162.50486935106028,
+      "random_ratio_to_best": 2.6250486935106028,
+      "set_members": [
+        "rl301",
+        "v2at302",
+        "v2rl310",
+        "v2rl305",
+        "v2rl308",
+        "v2rl307",
+        "v2rl302",
+        "v2rl306",
+        "v2rl304",
+        "v2rl301",
+        "edd",
+        "pfifo"
+      ],
+      "set_size": 12,
+      "set_statement": "EDD and PFIFO, eight of the ten policy seeds, one of the ten attention seeds, and one of the three first-curriculum seeds",
+      "wmdd_in_set": 0,
+      "wmdd_mean": 3139.498493333333,
+      "wmdd_pct_from_best": 1.1208276133185993,
+      "wmdd_ratio_to_best": 1.011208276133186,
+      "wspt_in_set": 0,
+      "wspt_mean": 3527.015606666667,
+      "wspt_pct_from_best": 13.602455267481119,
+      "wspt_ratio_to_best": 1.1360245526748112
+    },
+    "u_target=1.1": {
+      "atc_in_set": 0,
+      "atc_mean": 3736.4078600000003,
+      "atc_pct_from_best": 1.2989443076616318,
+      "atc_ratio_to_best": 1.0129894430766164,
+      "best_method": "rl301",
+      "edd_in_set": 1,
+      "edd_mean": 3699.8349366666666,
+      "edd_pct_from_best": 0.30740412716545323,
+      "edd_ratio_to_best": 1.0030740412716546,
+      "lpt_in_set": 0,
+      "lpt_mean": 52750.152623333335,
+      "lpt_pct_from_best": 1330.1261995556595,
+      "lpt_ratio_to_best": 14.301261995556594,
+      "mean_best": 3688.4963466666663,
+      "n_clusters": 60,
+      "n_configs": 60,
+      "policy_pool_mean": 3806.663329666667,
+      "policy_pool_vs_best_diff": 118.16698300000044,
+      "policy_pool_vs_best_pct": 3.2036627366267885,
+      "policy_pool_vs_best_verdict": "worse",
+      "policy_pool_vs_edd_pct": 2.887382675948412,
+      "policy_seed_max_mean": 4196.1345,
+      "policy_seed_min_mean": 3691.8667499999997,
+      "policy_seed_spread_pct": 13.65888273188627,
+      "policy_seeds_in_set": 4,
+      "random_in_set": 0,
+      "random_mean": 14661.981143333333,
+      "random_pct_from_best": 297.50564363669554,
+      "random_ratio_to_best": 3.9750564363669554,
+      "set_members": [
+        "rl301",
+        "v2rl305",
+        "v2at302",
+        "v2rl310",
+        "v2rl304",
+        "pfifo",
+        "edd",
+        "v2rl308"
+      ],
+      "set_size": 8,
+      "set_statement": "EDD and PFIFO, four of the ten policy seeds, one of the ten attention seeds, and one of the three first-curriculum seeds",
+      "wmdd_in_set": 0,
+      "wmdd_mean": 3737.1529633333334,
+      "wmdd_pct_from_best": 1.3191450416004509,
+      "wmdd_ratio_to_best": 1.0131914504160044,
+      "wspt_in_set": 0,
+      "wspt_mean": 4509.238141666667,
+      "wspt_pct_from_best": 22.251392379491268,
+      "wspt_ratio_to_best": 1.2225139237949127
+    },
+    "u_target=1.3": {
+      "atc_in_set": 0,
+      "atc_mean": 4641.9146783333335,
+      "atc_pct_from_best": 1.5778231555830298,
+      "atc_ratio_to_best": 1.0157782315558304,
+      "best_method": "v2rl304",
+      "edd_in_set": 0,
+      "edd_mean": 4591.817011666667,
+      "edd_pct_from_best": 0.4815488210015234,
+      "edd_ratio_to_best": 1.0048154882100153,
+      "lpt_in_set": 0,
+      "lpt_mean": 113533.62471666667,
+      "lpt_pct_from_best": 2384.427063580283,
+      "lpt_ratio_to_best": 24.84427063580283,
+      "mean_best": 4569.811140000001,
+      "n_clusters": 60,
+      "n_configs": 60,
+      "policy_pool_mean": 5174.8522135,
+      "policy_pool_vs_best_diff": 605.0410735,
+      "policy_pool_vs_best_pct": 13.23995795371097,
+      "policy_pool_vs_best_verdict": "worse",
+      "policy_pool_vs_edd_pct": 12.697265599913631,
+      "policy_seed_max_mean": 7135.676103333333,
+      "policy_seed_min_mean": 4569.811140000001,
+      "policy_seed_spread_pct": 56.14816202958735,
+      "policy_seeds_in_set": 1,
+      "random_in_set": 0,
+      "random_mean": 36141.300443333326,
+      "random_pct_from_best": 690.8707676556918,
+      "random_ratio_to_best": 7.908707676556918,
+      "set_members": [
+        "v2rl304"
+      ],
+      "set_size": 1,
+      "set_statement": "one of the ten policy seeds",
+      "wmdd_in_set": 0,
+      "wmdd_mean": 4629.958246666666,
+      "wmdd_pct_from_best": 1.3161836413805366,
+      "wmdd_ratio_to_best": 1.0131618364138053,
+      "wspt_in_set": 0,
+      "wspt_mean": 6802.922753333333,
+      "wspt_pct_from_best": 48.86660618831027,
+      "wspt_ratio_to_best": 1.4886660618831027
+    }
+  },
+  "latency": {
+    "generator_rules": {
+      "median_ms": 0.00610700666550275,
+      "p90_ms": 0.03432109564566717
+    },
+    "generator_v2_attn": {
+      "median_ms": 0.8065049765534755,
+      "p90_ms": 1.6431785168354414
+    },
+    "generator_v2_mlp": {
+      "median_ms": 0.4312526734019918,
+      "p90_ms": 1.4778938977193128
+    },
+    "rolling_replan": {
+      "median_s": 0.10764970564746776,
+      "n_rows": 144,
+      "p90_s": 1.5321921967267038
+    },
+    "rules": {
+      "median_ms": 0.0029642099980264,
+      "n_rows": 3780,
+      "p90_ms": 0.008136820484651159
+    },
+    "v1_mlp": {
+      "median_ms": 0.2194303550641052,
+      "n_rows": 1620,
+      "p90_ms": 0.429964841498683
+    },
+    "v2_attn": {
+      "median_ms": 0.5827569759761293,
+      "n_rows": 5400,
+      "p90_ms": 0.8680340314167553
+    },
+    "v2_mlp": {
+      "median_ms": 0.19458694616332645,
+      "n_rows": 5400,
+      "p90_ms": 0.3478077547624707
+    }
+  },
+  "rolling": {
+    "budget_s": 2.0,
+    "n_configs": 160,
+    "per_cell": 8,
+    "vs_atc_by_m": {
+      "m=0.6": {
+        "ci": [
+          -11.759243437499995,
+          -0.4929883333333402
+        ],
+        "holm_p": 1.0,
+        "mean_diff": -5.110374999999994,
+        "mean_ref": 515.1568375,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "inconclusive"
+      },
+      "m=0.8": {
+        "ci": [
+          -4.895887916666661,
+          -0.014438125000000308
+        ],
+        "holm_p": 0.113725149057248,
+        "mean_diff": -1.7931874999999977,
+        "mean_ref": 507.82965416666667,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "equivalent"
+      },
+      "m=1.0": {
+        "ci": [
+          -1.5527924999999734,
+          0.0636172916666946
+        ],
+        "holm_p": 0.006706840891103933,
+        "mean_diff": -0.48753749999998713,
+        "mean_ref": 506.2956541666667,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "equivalent"
+      }
+    },
+    "vs_atc_emp_pooled": {
+      "ALL": {
+        "ci": [
+          -8.375902433192687,
+          0.44694244384947357
+        ],
+        "holm_p": 0.031600493046739175,
+        "mean_diff": -3.454106249999994,
+        "mean_ref": 513.86338,
+        "n_clusters": 64,
+        "n_configs": 160,
+        "verdict": "inconclusive"
+      }
+    },
+    "vs_atc_stress": {
+      "campus=2|m=1.0": {
+        "ci": [
+          -102.6647487500002,
+          36.45127500000011
+        ],
+        "holm_p": 1.0,
+        "mean_diff": -24.746150000000014,
+        "mean_ref": 1001.5293250000001,
+        "n_clusters": 8,
+        "n_configs": 8,
+        "verdict": "inconclusive"
+      }
+    },
+    "vs_atc_transfer": {
+      "campus=1|m=1.0": {
+        "ci": [
+          0.0031999999999996476,
+          0.021175000000003052
+        ],
+        "holm_p": 0.75,
+        "mean_diff": 0.010625000000000995,
+        "mean_ref": 100.0454,
+        "n_clusters": 8,
+        "n_configs": 8,
+        "verdict": "equivalent"
+      }
+    },
+    "vs_edd_by_m": {
+      "m=0.6": {
+        "ci": [
+          -1.9964078124999853,
+          0.3929163541666664
+        ],
+        "holm_p": 0.5106587878775254,
+        "mean_diff": -0.6512708333333269,
+        "mean_ref": 510.69773333333325,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "equivalent"
+      },
+      "m=0.8": {
+        "ci": [
+          -1.33013729166667,
+          0.06076729166666382
+        ],
+        "holm_p": 0.08557200215450783,
+        "mean_diff": -0.5109166666666655,
+        "mean_ref": 506.54738333333336,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "equivalent"
+      },
+      "m=1.0": {
+        "ci": [
+          -0.1450474999999873,
+          0.05329395833337911
+        ],
+        "holm_p": 0.00207482782699835,
+        "mean_diff": -0.019595833333321266,
+        "mean_ref": 505.82771249999996,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "equivalent"
+      }
+    },
+    "vs_edd_emp_pooled": {
+      "ALL": {
+        "ci": [
+          -16.1593942042297,
+          1.33749915625001
+        ],
+        "holm_p": 0.001479555626975354,
+        "mean_diff": -5.536109999999998,
+        "mean_ref": 515.9453837499999,
+        "n_clusters": 64,
+        "n_configs": 160,
+        "verdict": "inconclusive"
+      }
+    },
+    "vs_edd_stress": {
+      "campus=2|m=1.0": {
+        "ci": [
+          -280.4918237499999,
+          33.90300250000001
+        ],
+        "holm_p": 1.0,
+        "mean_diff": -103.64212500000005,
+        "mean_ref": 1080.4252999999999,
+        "n_clusters": 8,
+        "n_configs": 8,
+        "verdict": "inconclusive"
+      }
+    },
+    "vs_edd_transfer": {
+      "campus=1|m=1.0": {
+        "ci": [
+          0.0031999999999996476,
+          0.021100000000004115
+        ],
+        "holm_p": 0.75,
+        "mean_diff": 0.010625000000000995,
+        "mean_ref": 100.0454,
+        "n_clusters": 8,
+        "n_configs": 8,
+        "verdict": "equivalent"
+      }
+    },
+    "vs_wmdd_by_m": {
+      "m=0.6": {
+        "ci": [
+          -7.915030625000042,
+          -0.367398958333325
+        ],
+        "holm_p": 1.0,
+        "mean_diff": -3.5779208333333457,
+        "mean_ref": 513.6243833333333,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "inconclusive"
+      },
+      "m=0.8": {
+        "ci": [
+          -3.3753731249999905,
+          0.0606681249999884
+        ],
+        "holm_p": 0.08557200215450783,
+        "mean_diff": -1.1828374999999969,
+        "mean_ref": 507.2193041666667,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "equivalent"
+      },
+      "m=1.0": {
+        "ci": [
+          -1.3251462499999878,
+          0.053208958333378076
+        ],
+        "holm_p": 0.00207482782699835,
+        "mean_diff": -0.4139958333333211,
+        "mean_ref": 506.2221124999999,
+        "n_clusters": 48,
+        "n_configs": 48,
+        "verdict": "equivalent"
+      }
+    },
+    "vs_wmdd_emp_pooled": {
+      "ALL": {
+        "ci": [
+          -4.326889449132689,
+          1.134899651898738
+        ],
+        "holm_p": 0.010803272012456424,
+        "mean_diff": -1.5255299999999998,
+        "mean_ref": 511.93480375,
+        "n_clusters": 64,
+        "n_configs": 160,
+        "verdict": "equivalent"
+      }
+    },
+    "vs_wmdd_stress": {
+      "campus=2|m=1.0": {
+        "ci": [
+          -37.08107500000017,
+          42.94132500000006
+        ],
+        "holm_p": 1.0,
+        "mean_diff": 0.5272999999999826,
+        "mean_ref": 976.255875,
+        "n_clusters": 8,
+        "n_configs": 8,
+        "verdict": "inconclusive"
+      }
+    },
+    "vs_wmdd_transfer": {
+      "campus=1|m=1.0": {
+        "ci": [
+          0.0031999999999996476,
+          0.020856249999999396
+        ],
+        "holm_p": 0.75,
+        "mean_diff": 0.010625000000000995,
+        "mean_ref": 100.0454,
+        "n_clusters": 8,
+        "n_configs": 8,
+        "verdict": "equivalent"
+      }
+    }
+  },
+  "stress": {
+    "atc_pct_from_best": 2.7816506455292496,
+    "best_method": "wmdd",
+    "edd_pct_from_best": 7.641691816968763,
+    "mean_best": 1218.2288470588235,
+    "n_clusters": 17,
+    "n_configs": 17,
+    "scope": "campus=2|m=1.0",
+    "set_members": [
+      "wmdd"
+    ],
+    "set_size": 1,
+    "set_statement": "WMDD",
+    "utilization": {
+      "n_configs": 17.0,
+      "n_in_bin_0.5-0.8": 1.0,
+      "n_in_bin_0.8-1.0": 3.0,
+      "n_in_bin_1.0-1.2": 3.0,
+      "n_in_bin_>=1.2": 10.0,
+      "share_over_one": 0.7647058823529411,
+      "u_max": 2.9026724662896903,
+      "u_mean": 1.3556726804961645,
+      "u_median": 1.2328792297914763,
+      "u_min": 0.7851173500654647,
+      "u_p25": 1.02532079556217,
+      "u_p75": 1.409785961597011
+    }
+  },
+  "transfer": {
+    "atc_pct_from_best": 0.0,
+    "best_method": "atc",
+    "edd_pct_from_best": 0.0,
+    "mean_best": 80.41734666666666,
+    "n_clusters": 30,
+    "n_configs": 30,
+    "scope": "campus=1|m=1.0",
+    "set_members": [
+      "atc",
+      "v2rl310",
+      "v2rl309",
+      "v2rl308",
+      "v2rl307",
+      "v2rl306",
+      "v2rl305",
+      "v2rl304",
+      "v2rl303",
+      "v2rl302",
+      "v2rl301",
+      "v2at310",
+      "v2at309",
+      "v2at308",
+      "v2at307",
+      "v2at306",
+      "v2at305",
+      "v2at304",
+      "v2at302",
+      "v2at301",
+      "rl303",
+      "rl302",
+      "rl301",
+      "pfifo",
+      "lpt",
+      "edd",
+      "wmdd",
+      "v2at303"
+    ],
+    "set_size": 28,
+    "set_statement": "EDD, PFIFO, ATC, WMDD and LPT, all ten policy seeds, all ten attention seeds, and all three first-curriculum seeds"
+  }
+}

@@ -1,0 +1,235 @@
+{
+  "experiment": "r4_visibility",
+  "protocol": "docs/protocol.md R4.6 (+ the 2026-08-19 R4 adjustment) / docs/protocol.md §R4 (design S5)",
+  "date": "2026-08-19",
+  "start_time": "2026-08-19T19:02:22",
+  "end_time": "2026-08-19T20:48:15",
+  "elapsed_seconds": 6353.331,
+  "workers": 10,
+  "smoke": false,
+  "eval_set": "visibility",
+  "out_dir": "./results/r4_visibility",
+  "index_csv": "./data/processed/instances_r4/index_r4.csv",
+  "vis_index_csv": "./data/processed/instances_r4vis/index_r4vis.csv",
+  "visibility_levels": [
+    {
+      "tag": "0",
+      "L_bh": 0.0
+    },
+    {
+      "tag": "8",
+      "L_bh": 8.0
+    },
+    {
+      "tag": "40",
+      "L_bh": 40.0
+    },
+    {
+      "tag": "full",
+      "L_bh": null
+    }
+  ],
+  "constant_rules": [
+    "edd",
+    "atc",
+    "wmdd"
+  ],
+  "constant_rules_run_at": "0",
+  "atc_la": true,
+  "vis_arms": [
+    {
+      "method": "vis0rl501",
+      "visibility_L": "0",
+      "ckpt": "./results/p3_train/vis0/seed501/best.pt",
+      "seed": 501
+    },
+    {
+      "method": "vis0rl502",
+      "visibility_L": "0",
+      "ckpt": "./results/p3_train/vis0/seed502/best.pt",
+      "seed": 502
+    },
+    {
+      "method": "vis0rl503",
+      "visibility_L": "0",
+      "ckpt": "./results/p3_train/vis0/seed503/best.pt",
+      "seed": 503
+    },
+    {
+      "method": "vis0rl504",
+      "visibility_L": "0",
+      "ckpt": "./results/p3_train/vis0/seed504/best.pt",
+      "seed": 504
+    },
+    {
+      "method": "vis0rl505",
+      "visibility_L": "0",
+      "ckpt": "./results/p3_train/vis0/seed505/best.pt",
+      "seed": 505
+    },
+    {
+      "method": "vis8rl501",
+      "visibility_L": "8",
+      "ckpt": "./results/p3_train/vis8/seed501/best.pt",
+      "seed": 501
+    },
+    {
+      "method": "vis8rl502",
+      "visibility_L": "8",
+      "ckpt": "./results/p3_train/vis8/seed502/best.pt",
+      "seed": 502
+    },
+    {
+      "method": "vis8rl503",
+      "visibility_L": "8",
+      "ckpt": "./results/p3_train/vis8/seed503/best.pt",
+      "seed": 503
+    },
+    {
+      "method": "vis8rl504",
+      "visibility_L": "8",
+      "ckpt": "./results/p3_train/vis8/seed504/best.pt",
+      "seed": 504
+    },
+    {
+      "method": "vis8rl505",
+      "visibility_L": "8",
+      "ckpt": "./results/p3_train/vis8/seed505/best.pt",
+      "seed": 505
+    },
+    {
+      "method": "vis40rl501",
+      "visibility_L": "40",
+      "ckpt": "./results/p3_train/vis40/seed501/best.pt",
+      "seed": 501
+    },
+    {
+      "method": "vis40rl502",
+      "visibility_L": "40",
+      "ckpt": "./results/p3_train/vis40/seed502/best.pt",
+      "seed": 502
+    },
+    {
+      "method": "vis40rl503",
+      "visibility_L": "40",
+      "ckpt": "./results/p3_train/vis40/seed503/best.pt",
+      "seed": 503
+    },
+    {
+      "method": "vis40rl504",
+      "visibility_L": "40",
+      "ckpt": "./results/p3_train/vis40/seed504/best.pt",
+      "seed": 504
+    },
+    {
+      "method": "vis40rl505",
+      "visibility_L": "40",
+      "ckpt": "./results/p3_train/vis40/seed505/best.pt",
+      "seed": 505
+    },
+    {
+      "method": "visfullrl501",
+      "visibility_L": "full",
+      "ckpt": "./results/p3_train/visfull/seed501/best.pt",
+      "seed": 501
+    },
+    {
+      "method": "visfullrl502",
+      "visibility_L": "full",
+      "ckpt": "./results/p3_train/visfull/seed502/best.pt",
+      "seed": 502
+    },
+    {
+      "method": "visfullrl503",
+      "visibility_L": "full",
+      "ckpt": "./results/p3_train/visfull/seed503/best.pt",
+      "seed": 503
+    },
+    {
+      "method": "visfullrl504",
+      "visibility_L": "full",
+      "ckpt": "./results/p3_train/visfull/seed504/best.pt",
+      "seed": 504
+    },
+    {
+      "method": "visfullrl505",
+      "visibility_L": "full",
+      "ckpt": "./results/p3_train/visfull/seed505/best.pt",
+      "seed": 505
+    }
+  ],
+  "vis_arms_missing": {
+    "0": 0,
+    "8": 0,
+    "40": 0,
+    "full": 0
+  },
+  "v2_pool_seeds": [
+    301,
+    302,
+    303,
+    304,
+    305,
+    306,
+    307,
+    308,
+    309,
+    310
+  ],
+  "pdr_seed": 301,
+  "rollcp_budget_s": 2.0,
+  "cpsat_workers": 2,
+  "torch_threads": 1,
+  "rollcp_per_cell": 8,
+  "no_rollcp": false,
+  "n_rollcp_configs": 144,
+  "crew_multipliers": [
+    1.0,
+    0.8,
+    0.6
+  ],
+  "verdict_campuses": [
+    5,
+    9,
+    10,
+    12
+  ],
+  "generator_cells": {
+    "campuses": [
+      5,
+      9,
+      10,
+      12
+    ],
+    "pm_shares": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "u_targets": [
+      0.7,
+      0.9,
+      1.1
+    ],
+    "window_bh": 80.0,
+    "per_cell": 15,
+    "seed_base": 90000,
+    "seed_cell_stride": 1000
+  },
+  "n_configs": 1080,
+  "n_configs_by_regime": {
+    "vis-empirical": 540,
+    "vis-gen": 540
+  },
+  "n_pending_this_run": 1080,
+  "n_completed_this_run": 1080,
+  "n_errors_this_run": 0,
+  "n_rows": 50256,
+  "n_infeasible": 0,
+  "filters": {
+    "skip_gen": false,
+    "skip_emp": false,
+    "limit": null
+  },
+  "git_describe": "paper-v4-27-g20d623ab-dirty"
+}

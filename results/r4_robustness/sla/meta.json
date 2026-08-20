@@ -1,0 +1,67 @@
+{
+  "experiment": "r4_sla_scenarios",
+  "protocol": "R4.10",
+  "generated": "2026-08-19T18:59:53",
+  "start_time": "2026-08-19T18:59:28",
+  "elapsed_seconds": 25.402,
+  "smoke": false,
+  "base_set": "Eval-B replay",
+  "base_instances": 227,
+  "scenarios": [
+    {
+      "scenario": "emg",
+      "suffix": "_emg",
+      "sla_class_multipliers": {
+        "1": 0.5,
+        "2": 0.5
+      },
+      "pm_priority": null
+    },
+    {
+      "scenario": "rtn",
+      "suffix": "_rtn",
+      "sla_class_multipliers": {
+        "3": 0.5,
+        "4": 0.5
+      },
+      "pm_priority": null
+    },
+    {
+      "scenario": "pmp3",
+      "suffix": "_pmp3",
+      "sla_class_multipliers": {},
+      "pm_priority": 3
+    }
+  ],
+  "pm_class_weight": 2.0,
+  "pm_class_sla_bh": 80.0,
+  "rules": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random"
+  ],
+  "dispatch_seed": 301,
+  "policy_pool": [
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310"
+  ],
+  "policy_dir": "./results/p3_train/v2",
+  "workers": 12,
+  "n_configs": 681,
+  "n_rows": 11577,
+  "n_errors": 0,
+  "n_infeasible": 0,
+  "git_describe": "paper-v4-25-gbe054c7f-dirty"
+}

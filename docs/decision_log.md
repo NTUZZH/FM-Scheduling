@@ -105,3 +105,153 @@ manuscript discloses.
   ceiling reading. The decision map's primary colouring moved to the
   full-cell four-way comparison (22 of 27 ties; ATC outright on the
   calibration-artifact campus 2 and the two tightest training cells).
+- 2026-08-19 — **Revision protocol R4 fixed before any R4 result existed**
+  (full text in `docs/protocol.md`). Trigger: venue change after an
+  editorial rejection without scientific review, plus an internal
+  methodological review whose corrections are adopted before any new number
+  exists. Contents: label/definition corrections (MOR renamed LPT; the
+  formal model corrected to disjoint per-trade P | r_j | sum w_j T_j;
+  "workload-implied reference capacity"; "timestamp-ordered empirical
+  track" because WOStartDate's operational meaning is not documented by the
+  source); corpus v1.1 (priority mapping refit on training years only,
+  stable dominant-line sort, diffs measured and disclosed); WMDD added and
+  ATC's k tuned on development data only (grid {0.5,1,2,3,5,10}, frozen
+  before the final evaluation); a fresh untouched final evaluation
+  (anchor-shuffle seed 401, generator seed block 80000+, methods and
+  checkpoints frozen first, run once); cluster-bootstrap practical-
+  equivalence statistics with Holm correction, replacing the "beats 3 of 5"
+  gate as the primary comparison (the historical gate outcome stands as a
+  v1.0 result); a preventive-visibility experiment with pre-stated
+  hypotheses H1-H4 (L in {0, 8, 40, inf} bh, policy seeds 501+, generator
+  seeds 90000+); labor-line processing-time robustness (sum/max/single-line
+  models); capacity-estimator sensitivity (p75/p90/p95); a synthetic
+  release-backdating robustness scenario; and two additional service-window
+  scenario families plus a preventive-priority convention variant. All
+  v1.0 results remain reported as development evidence.
+- 2026-08-19 — **ATC look-ahead frozen at k = 2 by the R4.3 development
+  tuning** (`scripts/r4_atc_tune.py`, `results/r4_revision/atc_tuning*`).
+  Grid {0.5, 1, 2, 3, 5, 10} on the 760 training-period empirical-track
+  instances of the training campuses at crew multipliers {0.6, 0.8}, 9,120
+  schedules scored by the independent validator: pooled mean TWT is
+  minimized at k = 2 outright (290.50 vs 290.98 at k = 3 and 297.80 at
+  k = 1), so the selected value coincides with the literature default the
+  study had used throughout. No existing result changes; ATC may now be
+  described as development-tuned.
+- 2026-08-19 — **Corpus v1.1 diffs measured before adoption**
+  (`scripts/r4_corpus_diff.py`, `results/r4_revision/corpus_diff*`): the
+  train-only priority refit changes one mapping key (campus 10, raw value
+  4.0: class 3 under the all-years fit, class 4 under the training-window
+  fit, 513 work orders, 0.04%); the stable dominant-line sort changes 72
+  work orders (0.005%, mostly trade, campuses 2 and 9); combined, 585 of
+  1,449,262 work orders (0.04%) and 135 of 3,186 released replay instances
+  differ, with p_bh unchanged everywhere (asserted). A field-by-field
+  provenance check reproduced the released corpus exactly under the v1.0
+  pipeline before measuring. The labor-line audit is scripted
+  (`scripts/r4_labor_audit.py`): 9.5% of work orders are multi-line
+  (31% of rows); 96.1% of multi-line orders share a single start and end
+  timestamp and only 1.6% start more than one business day apart, the
+  signature of parallel labor lines rather than repeat visits.
+- 2026-08-19 — **Two R4 adjustments fixed before any Eval-B or visibility
+  result existed** (full text in `docs/protocol.md`): the Eval-B anchor
+  exclusion is relaxed to same-size-class released windows (the
+  whole-window rule is physically unsatisfiable for 400-order windows on
+  four campuses; measured gap distributions in the protocol text), and
+  rolling CP-SAT is excluded from the fixed-window generator cells of
+  Eval-B and the visibility experiment (one 2 s-budget run on the smallest
+  such instance exceeded 900 s; the v1.0 overload sweep had the same
+  boundary), remaining at 8 configurations per empirical cell. H3 is
+  evaluated on the empirical cells.
+- 2026-08-19 — **Eval-B corpus built (v1.1) and cell outcome recorded**
+  before any evaluation on it: under the same-size-class rule the four
+  400-order cells on campuses 1, 2, 5 and 9 REMAIN empty, because the
+  released 400-order windows themselves tile those campuses' test spans
+  (507/576/538/581 of ~526-601 candidate anchors still collide with
+  same-size released windows); they are dropped per R4.4's disclosure
+  branch. Final corpus: 227 empirical instances (150-order cells on all six
+  campuses, campus 2 restored with 17; 400-order cells on campuses 10 and
+  12 only) plus 300 fixed-window generator instances, 527 in total. Fresh
+  400-order empirical evidence therefore exists only on the two high-volume
+  campuses; the generator cells carry the larger-scale coverage, and the
+  v1.0 corpus remains the development evidence at size 400 elsewhere.
+- 2026-08-19 — **Generator-pack fit-window note (bounded, disclosed).** The
+  Eval-B and visibility generator packs (results/r4_final/gen_params) were
+  fitted before `generator.fit_params` gained the training-window mapping
+  argument, so the priority mapping used inside that fit was the all-years
+  one, which differs from the v1.1 mapping in exactly one rare key
+  (campus 10 raw value 4.0, class 3 vs 4, under 0.5% of that campus's
+  corrective rows; see the corpus-diff entry). The drawn instances are
+  frozen artifacts identical for every method, so no method comparison is
+  affected; the archived packs reproduce them exactly. Rebuilt development
+  packs (scripts/p2_generator.py --corpus v11) use the corrected call.
+- 2026-08-19 — **Reference-selection sensitivity run as a post-hoc analysis
+  (revision item A3).** The released equivalence sets are built around each
+  scope's lowest-mean method, which is a max-statistic selected on the same
+  data the intervals come from, so the sets are exposed to the winner's
+  curse and a reviewer may read them as an artifact of that choice.
+  `scripts/r4_ref_sensitivity.py` therefore recomputes all 31 reported
+  scopes with the reference FIXED A PRIORI at EDD, holding everything else
+  constant: the same configurations, the same pairing on the
+  instance-configuration id, the same 10,000-resample cluster bootstrap at
+  seed 12345, the same margin rule max(1.0, 1% of the reference mean) now
+  taken on EDD's paired mean, and the same Holm family structure. Outputs:
+  `results/r4_final/analysis/ref_sensitivity.csv` (930 rows, both
+  memberships side by side), `paper/supp_refsens.tex` and the \rfd block of
+  `paper/macros_r4d.tex`. Every row that `analysis/comparisons.csv` already
+  holds reproduces to the last digit (7 cross-checks). Result: the
+  narrowing survives, EDD-reference sets running 30/26/17 over the crew
+  multipliers, 29/26/17/8/18 over the empirical utilisation bins and
+  27/16/15/9/3 over the generator targets, against 30/26/15, 29/21/13/1/12
+  and 27/15/12/8/1 under the sample-best reference; the set is identical in
+  13 of the 31 scopes; and no method anywhere is better than EDD beyond the
+  margin (0 of 930 comparisons). This is a sensitivity analysis reported
+  beside the primary one, not a replacement for it: the released sets stand
+  as the paper's verdict.
+- 2026-08-19 — **Two trade-derivation shares measured (revision item A9).**
+  The trade taxonomy (UNIFORMAT top level) and the MISC merge threshold are
+  definitional choices that the robustness suite does not sweep, so the
+  manuscript now reports how much of the corpus each touches instead of
+  claiming every derived quantity is varied.
+  `scripts/r4_trade_shares.py` rebuilds the cleaned corpus exactly as the
+  instance builder does (v1.1 stable dominant-line sort) and writes
+  `results/p0_profile/trade_shares.json`: over the six benchmark campuses,
+  0.21% of the 1,449,262 retained work orders carry no system code (trade
+  UNK) and 0.90% are handled by a campus's merged MISC crew. The
+  work-order count is cross-checked against
+  `results/r4_revision/labor_audit.json` and the all-campus count against
+  `results/p0_profile/overview.json`; a mismatch aborts the script.
+
+## 2026-08-20 ~00:55 — E2 rebuild pin-thrash incident and remediation
+At 22:25 on 08-19 the running v1.1 rebuild chain was pinned to cores 8-15
+(shared-box core covenant with two sibling projects). The 12-worker E2 run,
+sized for the whole box, then oversubscribed the 8-core block (~8x slowdown,
+141 -> ~17 configs/min). VALIDITY: 616 shards written after the pin contain
+rollcp2 rows, whose 2 s wall-clock solver budget makes their plan quality
+compute-dependent; all 616 were DELETED (never merged into any results.csv)
+and re-run under clean conditions. Rule and policy rows are deterministic in
+quality and unaffected; no reported latency derives from this run (paper
+latencies come from the frozen final evaluation). The chain was restarted at
+workers 6 under taskset -c 8-15 (rebuild_resume2; marker line "resume2" in
+results/r4_revision/rebuild.log). E1 and the solvability gate completed
+before the pin and are untouched.
+
+## 2026-08-20 — E2 v1.1 rollcp2 contention audit (post-rebuild, forensics columns)
+
+Progress-stratified audit of the merged pool-1 results (81,366 rows), per
+the rule adopted after the pin-thrash incident: only rollcp2 rows that
+IMPROVED on the deterministic EDD fallback can carry contention bias; a
+row equal to its fallback made no progress and is contention-immune.
+
+- 1,536 rollcp2 rows total; 77 carry cpu/wall forensics (the resume-3
+  tail, patch active). The remaining rows come from the two eras with no
+  thrash exposure (the original pinned run and the workers-6-on-16-cores
+  resume); every shard written during the thrash window itself had been
+  deleted and re-run, so no surviving row predates that remediation.
+- Of the 77 audited rows: 18 improved on EDD. Minimum cpu/wall ratio
+  1.03 in the improved stratum (1.02 overall); ZERO rows below 1.0, the
+  starvation line (the incident-era ratios were 0.1-0.3). Median 1.26
+  improved / 1.14 not; the sub-2 medians are structural (the measurement
+  window spans the whole rolling episode, whose single-threaded
+  simulation phases dilute the 2-thread solve bursts).
+- Improved share 6.1% of rollcp2 rows, consistent with the manuscript's
+  limited-gain-at-2-s framing. VERDICT: no contamination signal; the 2 s
+  wall-clock rows stand.

@@ -19,7 +19,7 @@ Regimes (docs/decision_log.md 2026-07-05, Gate B protocol amendment)
 
 Methods per instance
 --------------------
-  PDRs : edd, wspt, atc, pfifo, mor, random          (seed 301)
+  PDRs : edd, wspt, atc, pfifo, lpt, wmdd, random    (seed 301)
   RL   : rl301, rl302, rl303  (greedy argmax, results/p3_train/seed<t>/best.pt,
          run through the DispatchEnv reset()/step() path on CPU)
   roll : rollcp2  -- ONLY on a subsample: the first --rollcp-per-cell (default 8)
@@ -144,7 +144,7 @@ SHARD_DIR = OUT_DIR / "shards"
 OUT_CSV = OUT_DIR / "results.csv"
 META_JSON = OUT_DIR / "meta.json"
 
-PDR_RULES = ["edd", "wspt", "atc", "pfifo", "mor", "random"]
+PDR_RULES = ["edd", "wspt", "atc", "pfifo", "lpt", "wmdd", "random"]
 RL_SEEDS = [301, 302, 303]
 # RL method naming + checkpoint root are reconfigurable (--rl-tag/--rl-dir).
 # _configure_rl() rederives RL_METHODS/BASE_METHODS/_METHOD_ORDER in the parent
@@ -214,6 +214,9 @@ FIELDS = [
     "breach_p3", "breach_p4", "wall_seconds", "decisions",
     "mean_ms_per_decision", "mean_replan_s",
     "u_target", "u_realized",
+    # contention forensics (rollcp rows since the 2026-08-20 patch; empty
+    # elsewhere): process CPU vs wall time over the shard's rolling solve
+    "proc_cpu_seconds", "proc_wall_seconds", "cpu_wall_ratio",
 ]
 
 
@@ -820,9 +823,22 @@ def _run_one(config):
 
         # rollcp2 (subsample) -----------------------------------------------
         if config.get("rollcp") and ROLLCP_METHOD in todo:
+            # Contention forensics (additive fields only): rollcp2's 2 s
+            # wall-clock budget is the one measurement here whose QUALITY
+            # depends on actually getting the CPU, so record the process
+            # cpu/wall ratio over the whole rolling episode.  A ratio well
+            # below its cross-shard norm marks a solve that was starved of
+            # cores, auditable after the fact (added 2026-08-20).
+            _cpu0, _wal0 = time.process_time(), time.perf_counter()
             sched = rolling.roll_cpsat(instance, budget_s=ROLLCP_BUDGET_S)
+            _cpu1, _wal1 = time.process_time(), time.perf_counter()
             res = validate(instance, sched)
-            out_rows[ROLLCP_METHOD] = _row(config, ROLLCP_METHOD, 0, sched, res)
+            row = _row(config, ROLLCP_METHOD, 0, sched, res)
+            row["proc_cpu_seconds"] = round(_cpu1 - _cpu0, 4)
+            row["proc_wall_seconds"] = round(_wal1 - _wal0, 4)
+            row["cpu_wall_ratio"] = round(
+                (_cpu1 - _cpu0) / max(_wal1 - _wal0, 1e-9), 4)
+            out_rows[ROLLCP_METHOD] = row
             if not res["feasible"]:
                 infeasible.append({"method": ROLLCP_METHOD,
                                    "violations": res["violations"][:3]})

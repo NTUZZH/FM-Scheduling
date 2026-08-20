@@ -10,9 +10,10 @@ dispatching rules (``fmwos.pdrs``) and the learned policy are measured against
 
 Protocol (spec-locked)
 ----------------------
-* Replan trigger: new arrival(s).  Arrivals within ``BATCH_BH`` (0.1 bh) of the
-  first arrival of a batch are folded into ONE replan (a bounded number of
-  simultaneous / near-simultaneous releases -> one solve).
+* Replan trigger: new arrival(s), and (R4.6) a preventive order becoming KNOWN.
+  Events within ``BATCH_BH`` (0.1 bh) of the first event of a batch are folded
+  into ONE replan (a bounded number of simultaneous / near-simultaneous releases
+  -> one solve).
 * Snapshot model: the released-and-unstarted jobs (the queue); technicians are
   available from their ``busy_until`` time (a tech running an in-progress job is
   unavailable until it finishes -- in-progress jobs are FIXED, never re-solved).
@@ -31,6 +32,19 @@ Protocol (spec-locked)
   missing from the incumbent is a replan whose CP-SAT returned NO solution
   within the budget -- those jobs are covered by a deterministic EDD-appended
   fallback plan (re-optimised at the next replan) so execution always completes.
+
+Preventive visibility (R4.6, docs/protocol.md §R4.6)
+--------------------------------------------------
+``visibility_L`` (business hours; ``None`` = the whole instance is known from bh
+0, ``0.0`` = the status quo) is passed straight to ``fmwos.env.known_bh``, so the
+planner and the dispatch environment share ONE definition of what "known" means.
+A preventive order that is known but unreleased enters the snapshot with its true
+shifted release ``r_j - t > 0`` (CP-SAT models release dates natively), so the
+solver may plan around it and a technician may deliberately idle waiting for it.
+It still cannot START early: ``_start_job`` clamps every start to the release,
+and the validator's release check polices the emitted schedule independently.
+At ``L=0`` nothing is known early, no ``_KNOWN`` event is pushed, and the run is
+bit-identical to the pre-R4 planner.
 
 Output: a schedule dict per the interface spec with ``method='rollcp2'``,
 ``decisions`` = number of replans, ``wall_seconds`` = total wall (solve time
@@ -63,6 +77,7 @@ import heapq
 import time
 
 from . import cpsat
+from .env import check_visibility_L, known_bh
 
 BATCH_BH = 0.1          # arrivals within this window fold into one replan
 REPLAN_EVERY_BH = 4.0   # periodic trigger: bound plan staleness even with no
@@ -76,14 +91,16 @@ _EPS = 1e-6
 _FREE = 0    # a technician finished its job
 _WAKE = 1    # a deliberate-idle period ended; re-evaluate the technician
 _REL = 2     # a work order was released
+_KNOWN = 3   # a preventive order became visible (R4.6), still unreleased
 
 
 class _RollingSim:
     """Event-driven simulator that re-solves a CP-SAT snapshot on each arrival."""
 
-    def __init__(self, instance: dict, budget_s: float = 2.0):
+    def __init__(self, instance: dict, budget_s: float = 2.0, visibility_L=0.0):
         self.instance = instance
         self.budget_s = float(budget_s)
+        self.visibility_L = check_visibility_L(visibility_L)
 
         self.jobs = {wo["id"]: wo for wo in instance["work_orders"]}
         self.technicians = list(instance["technicians"])
@@ -99,7 +116,9 @@ class _RollingSim:
         self.tech_busy = {t["id"]: None for t in self.technicians}   # job id or None
         self.tech_wake = {}                                          # tid -> pending wake bh
 
-        # Per-job state machine: 'unreleased' -> 'queued' -> 'in_progress' -> 'done'.
+        # Per-job state machine (R4.6 inserts 'known' between 'unreleased' and
+        # 'queued'; without visibility a job never passes through it):
+        # 'unreleased' -> ['known' ->] 'queued' -> 'in_progress' -> 'done'.
         self.state = {jid: "unreleased" for jid in self.jobs}
 
         # Incumbent plan: tech id -> [(job_id, planned_start_abs), ...] for the
@@ -114,7 +133,13 @@ class _RollingSim:
         self._seq = 0
         self._events = []
         for wo in instance["work_orders"]:
-            self._push(float(wo["release_bh"]), _REL, wo["id"])
+            rel = float(wo["release_bh"])
+            kb = known_bh(wo, self.visibility_L)
+            if kb < rel:
+                # Only a strictly-early known time gets an event, so at L=0 the
+                # heap (and its sequence numbers) is exactly the pre-R4 one.
+                self._push(kb, _KNOWN, wo["id"])
+            self._push(rel, _REL, wo["id"])
 
     # ------------------------------------------------------------------ #
     def _push(self, t, kind, payload):
@@ -145,7 +170,10 @@ class _RollingSim:
                 continue                          # already committed to an idle wait
             nxt = None
             for (jid, ps) in self.incumbent.get(tid, ()):
-                if self.state[jid] == "queued":
+                # 'known' jobs count: the incumbent may put one first and have
+                # the technician wait for it. The start clamp below (and
+                # _start_job's own clamp) keep the start at or after the release.
+                if self.state[jid] in ("queued", "known"):
                     nxt = (jid, ps)
                     break
             if nxt is None:
@@ -162,14 +190,18 @@ class _RollingSim:
 
     # ------------------------------------------------------------------ #
     def _replan(self, now):
-        queued = [jid for jid, st in self.state.items() if st == "queued"]
-        if not queued:
+        # The snapshot plans the released queue AND (R4.6) the known but
+        # unreleased orders; the latter keep their true shifted release, so
+        # CP-SAT plans around them without being able to start them early.
+        plannable = [jid for jid, st in self.state.items()
+                     if st in ("queued", "known")]
+        if not plannable:
             return
-        queued.sort()   # deterministic snapshot order
+        plannable.sort()   # deterministic snapshot order
 
         # Snapshot instance in a frame shifted so `now` == 0.
         snap_wos = []
-        for jid in queued:
+        for jid in plannable:
             wo = self.jobs[jid]
             rel = max(0.0, float(wo["release_bh"]) - now)
             snap_wos.append({
@@ -190,9 +222,9 @@ class _RollingSim:
         tech_avail = {tid: max(0.0, self.tech_free_at[tid] - now)
                       for tid in self.tech_free_at}
 
-        # Warm start: map the current incumbent for still-queued jobs into the
-        # shifted frame (a hint; jobs no longer queued are dropped).
-        qset = set(queued)
+        # Warm start: map the current incumbent for still-plannable jobs into the
+        # shifted frame (a hint; started/finished jobs are dropped).
+        qset = set(plannable)
         warm_assign = []
         for tid, plan in self.incumbent.items():
             for (jid, ps) in plan:
@@ -221,7 +253,7 @@ class _RollingSim:
         # the next replan (if any) re-optimises them, and the executor's own
         # clamps keep whatever plan we hand it feasible.
         covered = {jid for plan in new_inc.values() for (jid, _ps) in plan}
-        missing = [jid for jid in queued if jid not in covered]
+        missing = [jid for jid in plannable if jid not in covered]
         if missing:
             plan_end = {}
             for t in self.technicians:
@@ -253,7 +285,7 @@ class _RollingSim:
         ev = self._events
         while ev:
             now = ev[0][0]
-            frees, rels = [], []
+            frees, rels, knowns = [], [], []
             # Drain everything at this exact instant.
             while ev and ev[0][0] == now:
                 _, _, kind, payload = heapq.heappop(ev)
@@ -261,6 +293,8 @@ class _RollingSim:
                     frees.append(payload)
                 elif kind == _REL:
                     rels.append(payload)
+                elif kind == _KNOWN:
+                    knowns.append(payload)
                 else:  # _WAKE: release the idle commitment so _dispatch acts.
                     w = self.tech_wake.get(payload)
                     if w is not None and w <= now + _EPS:
@@ -268,30 +302,36 @@ class _RollingSim:
                     # A wake whose commitment is later than now is STALE (its
                     # plan was replaced by a replan and a newer wake exists);
                     # leave the newer commitment for its own event.
-            # Fold near-simultaneous releases (within BATCH_BH) into this replan,
-            # but only extend past releases -- an intervening FREE/WAKE (which
-            # the heap would surface first, being earlier in time) stops the
-            # batch so global time ordering is preserved.
-            if rels:
-                while ev and ev[0][2] == _REL and ev[0][0] < now + BATCH_BH:
-                    _, _, _, payload = heapq.heappop(ev)
-                    rels.append(payload)
+            # Fold near-simultaneous releases and known-events (within BATCH_BH)
+            # into this replan, but only extend past those two kinds -- an
+            # intervening FREE/WAKE (which the heap would surface first, being
+            # earlier in time) stops the batch so global time ordering is
+            # preserved.
+            if rels or knowns:
+                while ev and ev[0][2] in (_REL, _KNOWN) and ev[0][0] < now + BATCH_BH:
+                    _, _, kind, payload = heapq.heappop(ev)
+                    (rels if kind == _REL else knowns).append(payload)
 
             for tid in frees:
                 jid = self.tech_busy[tid]
                 self.tech_busy[tid] = None
                 if jid is not None:
                     self.state[jid] = "done"
-            for jid in rels:
+            for jid in knowns:
                 if self.state[jid] == "unreleased":
+                    self.state[jid] = "known"
+            for jid in rels:
+                if self.state[jid] in ("unreleased", "known"):
                     self.state[jid] = "queued"
 
             stale = (
                 self.last_replan_at is not None
                 and now - self.last_replan_at >= REPLAN_EVERY_BH - _EPS
-                and any(st == "queued" for st in self.state.values())
+                and any(st in ("queued", "known") for st in self.state.values())
             )
-            if rels or stale:
+            # A newly KNOWN order changes the plan the same way an arrival does,
+            # so it joins the trigger set (R4.6).
+            if rels or knowns or stale:
                 self._replan(now)
             self._dispatch(now)
 
@@ -310,14 +350,19 @@ class _RollingSim:
         }
 
 
-def roll_cpsat(instance: dict, budget_s: float = 2.0) -> dict:
+def roll_cpsat(instance: dict, budget_s: float = 2.0, visibility_L=0.0) -> dict:
     """Run the rolling CP-SAT policy on ``instance`` (see module docstring).
+
+    ``visibility_L`` (bh; ``None`` = full visibility, ``0.0`` = the status quo)
+    is the R4.6 preventive-visibility level.  The method label stays
+    ``'rollcp2'`` at every level; result rows carry the level in their own
+    ``visibility_L`` column.
 
     Returns a schedule dict (method ``'rollcp2'``) with ``decisions`` = number of
     replans, ``wall_seconds`` = total wall (solve time included) and the extra
     key ``mean_replan_s`` = mean CP-SAT wall per replan.
     """
     t0 = time.perf_counter()
-    sim = _RollingSim(instance, budget_s=budget_s)
+    sim = _RollingSim(instance, budget_s=budget_s, visibility_L=visibility_L)
     sim.run()
     return sim.to_schedule(time.perf_counter() - t0)

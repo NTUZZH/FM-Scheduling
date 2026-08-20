@@ -88,7 +88,8 @@ def _quarter_bdays(first: pd.Timestamp, last: pd.Timestamp) -> np.ndarray:
     return out
 
 
-def fit_params(clean_df: pd.DataFrame, campus: int) -> dict:
+def fit_params(clean_df: pd.DataFrame, campus: int,
+               mapping_fit_end=None) -> dict:
     """Fit the per-campus generator parameter pack.
 
     ``clean_df`` may be the full multi-campus cleaned frame or one already
@@ -106,8 +107,9 @@ def fit_params(clean_df: pd.DataFrame, campus: int) -> dict:
     capacity = calib.build_capacity(cdf, trade_m)
     cap_dict = {str(r.trade): int(r.crew) for r in capacity.itertuples()}
 
-    # ---- v2 priority mapping (all-year, reused from calib) ----------------- #
-    mapping = calib.build_priority_mapping(cdf)
+    # ---- v2 priority mapping (reused from calib; corpus v1.1 passes the ---- #
+    # ---- training-window fit end, protocol R4.2) ---------------------------- #
+    mapping = calib.build_priority_mapping(cdf, fit_end=mapping_fit_end)
     priority = calib.priority_class_series(cdf, mapping)
 
     # ---- assemble a working frame ----------------------------------------- #

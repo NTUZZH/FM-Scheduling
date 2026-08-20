@@ -10,7 +10,7 @@ Protocol (the training spec §5 + the AMENDED Gate B protocol, docs/decision_log
   generator storm cells).  Both are reported regardless of outcome.
 * "Beats a PDR" = LOWER mean WWT than that PDR AND paired Wilcoxon p < 0.05
   (ties are not wins).  The gate PDR set is the 5 deterministic rules
-  {edd, wspt, atc, pfifo, mor} ('random' is a sanity baseline, not gated).
+  {edd, wspt, atc, pfifo, lpt} ('random' is a sanity baseline, not gated).
 * PASS for a regime = the policy beats >= 3/5 PDRs CONSISTENTLY in all 3 seeds
   (each seed individually satisfies the beat criterion for that PDR).
 * Win/tie/loss counts use tie tolerance eps = 1.0 weighted units (Gate A
@@ -60,11 +60,14 @@ import numpy as np
 import pandas as pd
 from scipy.stats import wilcoxon
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from fmwos.io import normalize_method_column  # noqa: E402  (archived "mor" -> "lpt")
+
 _ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = _ROOT / "results" / "p4_dyneval"
 DEFAULT_CSV = OUT_DIR / "results.csv"
 
-GATE_PDRS = ["edd", "wspt", "atc", "pfifo", "mor"]   # the 5 gated PDRs
+GATE_PDRS = ["edd", "wspt", "atc", "pfifo", "lpt"]   # the 5 gated PDRs (v1.0 files say "mor")
 ALL_PDRS = GATE_PDRS + ["random"]
 RL_SEEDS = [301, 302, 303]
 # RL method naming is reconfigurable (--rl-tag); _configure_rl() rederives the
@@ -346,7 +349,7 @@ def main(argv=None):
     if not csv_path.exists():
         sys.exit("results csv not found: %s (run scripts/p4_dyneval.py first)"
                  % csv_path)
-    df = pd.read_csv(csv_path)
+    df = normalize_method_column(pd.read_csv(csv_path))
     eps = float(args.eps)
 
     n_rows = len(df)
@@ -613,7 +616,7 @@ def main(argv=None):
     tex_cols.append(("Storm", t[t["regime"] == "storm"]))
 
     label = {"edd": "EDD", "wspt": "WSPT", "atc": "ATC", "pfifo": "pFIFO",
-             "mor": "MOR", "random": "Random",
+             "lpt": "LPT", "random": "Random",
              ROLLCP: "Rolling CP-SAT (2\\,s)$^{\\dagger}$"}
     for s in RL_SEEDS:
         label[_rl_method(s)] = "Policy (seed %d)" % s

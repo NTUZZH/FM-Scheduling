@@ -1,0 +1,351 @@
+{
+  "script": "scripts/r4_robust_analysis.py",
+  "generated": "2026-08-19T19:29:54",
+  "elapsed_seconds": 27.909507,
+  "inputs": {
+    "pmodel": "results/r4_robustness/pmodel/results.csv",
+    "capacity": "results/r4_robustness/capacity/results.csv",
+    "backdate": "results/r4_robustness/backdate/results.csv",
+    "sla": "results/r4_robustness/sla/results.csv",
+    "evalb_anchors": "./results/r4_final/results.csv"
+  },
+  "value_col": "wwt",
+  "n_boot": 10000,
+  "seed": 12345,
+  "alpha": 0.05,
+  "margin_abs": 1.0,
+  "margin_rel": 0.01,
+  "verdict_campuses": [
+    5,
+    9,
+    10,
+    12
+  ],
+  "scored_methods": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random",
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310"
+  ],
+  "families": {
+    "duedate": [
+      "edd",
+      "pfifo"
+    ],
+    "weighted": [
+      "atc",
+      "wmdd"
+    ],
+    "processing": [
+      "wspt",
+      "lpt"
+    ],
+    "random": [
+      "random"
+    ],
+    "policy": [
+      "v2rl301",
+      "v2rl302",
+      "v2rl303",
+      "v2rl304",
+      "v2rl305",
+      "v2rl306",
+      "v2rl307",
+      "v2rl308",
+      "v2rl309",
+      "v2rl310"
+    ]
+  },
+  "rank_correlation": "scipy.stats.kendalltau (tau-b)",
+  "sanity_checks": [
+    {
+      "check": "Eval-B anchors at m=1.0",
+      "got": 227,
+      "want": 227,
+      "ok": true
+    },
+    {
+      "check": "Eval-B anchors, verdict stratum",
+      "got": 180,
+      "want": 180,
+      "ok": true
+    },
+    {
+      "check": "Eval-B scored methods",
+      "got": 17,
+      "want": 17,
+      "ok": true
+    },
+    {
+      "check": "pmodel: configs vs meta.json",
+      "got": 680,
+      "want": 680,
+      "ok": true
+    },
+    {
+      "check": "pmodel: rows vs meta.json",
+      "got": 11560,
+      "want": 11560,
+      "ok": true
+    },
+    {
+      "check": "pmodel: infeasible vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "pmodel: errors vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "pmodel: base instances vs meta.json",
+      "got": 227,
+      "want": 227,
+      "ok": true
+    },
+    {
+      "check": "pmodel: methods scored",
+      "got": 17,
+      "want": 17,
+      "ok": true
+    },
+    {
+      "check": "pmodel: every anchor is an Eval-B anchor",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "pmodel: id suffix strips back to the anchor",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "pmodel: every method covers every configuration of its arm",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "pmodel: value column has no missing entry",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "capacity: configs vs meta.json",
+      "got": 454,
+      "want": 454,
+      "ok": true
+    },
+    {
+      "check": "capacity: rows vs meta.json",
+      "got": 7718,
+      "want": 7718,
+      "ok": true
+    },
+    {
+      "check": "capacity: infeasible vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "capacity: errors vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "capacity: base instances vs meta.json",
+      "got": 227,
+      "want": 227,
+      "ok": true
+    },
+    {
+      "check": "capacity: methods scored",
+      "got": 17,
+      "want": 17,
+      "ok": true
+    },
+    {
+      "check": "capacity: every anchor is an Eval-B anchor",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "capacity: id suffix strips back to the anchor",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "capacity: every method covers every configuration of its arm",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "capacity: value column has no missing entry",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "backdate: configs vs meta.json",
+      "got": 227,
+      "want": 227,
+      "ok": true
+    },
+    {
+      "check": "backdate: rows vs meta.json",
+      "got": 3859,
+      "want": 3859,
+      "ok": true
+    },
+    {
+      "check": "backdate: infeasible vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "backdate: errors vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "backdate: base instances vs meta.json",
+      "got": 227,
+      "want": 227,
+      "ok": true
+    },
+    {
+      "check": "backdate: methods scored",
+      "got": 17,
+      "want": 17,
+      "ok": true
+    },
+    {
+      "check": "backdate: every anchor is an Eval-B anchor",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "backdate: id suffix strips back to the anchor",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "backdate: every method covers every configuration of its arm",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "backdate: value column has no missing entry",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "sla: configs vs meta.json",
+      "got": 681,
+      "want": 681,
+      "ok": true
+    },
+    {
+      "check": "sla: rows vs meta.json",
+      "got": 11577,
+      "want": 11577,
+      "ok": true
+    },
+    {
+      "check": "sla: infeasible vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "sla: errors vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "sla: base instances vs meta.json",
+      "got": 227,
+      "want": 227,
+      "ok": true
+    },
+    {
+      "check": "sla: methods scored",
+      "got": 17,
+      "want": 17,
+      "ok": true
+    },
+    {
+      "check": "sla: every anchor is an Eval-B anchor",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "sla: id suffix strips back to the anchor",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "sla: every method covers every configuration of its arm",
+      "got": 1,
+      "want": 1,
+      "ok": true
+    },
+    {
+      "check": "sla: value column has no missing entry",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "R4.7 sum arm pairs with every Eval-B row",
+      "got": 3859,
+      "want": 3859,
+      "ok": true
+    },
+    {
+      "check": "R4.7 sum arm reproduces Eval-B exactly",
+      "got": 0.0,
+      "want": 0.0,
+      "ok": true
+    },
+    {
+      "check": "R4.8 baseline utilization matches Eval-B (max abs diff < 1e-6)",
+      "got": true,
+      "want": true,
+      "ok": true
+    }
+  ]
+}

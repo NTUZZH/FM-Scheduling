@@ -11,7 +11,7 @@ tau = 1 means the ordering is perfectly preserved (conclusions survive), tau
 near 0 means the sweep reshuffles the leaderboard.
 
 Rankings are by mean WWT (lower is better) over the 9 online methods
-(edd, wspt, atc, pfifo, mor, random, rl301..rl303).
+(edd, wspt, atc, pfifo, lpt, random, rl301..rl303).
 
 Outputs (results/p4_sensitivity/)
 ---------------------------------
@@ -55,9 +55,13 @@ import pandas as pd
 from scipy.stats import kendalltau
 
 _ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_ROOT / "src"))
+
+from fmwos.io import normalize_method_column  # noqa: E402
+
 OUT_DIR = _ROOT / "results" / "p4_sensitivity"
 
-ALL_PDRS = ["edd", "wspt", "atc", "pfifo", "mor", "random"]
+ALL_PDRS = ["edd", "wspt", "atc", "pfifo", "lpt", "random"]
 RL_SEEDS = [301, 302, 303]
 RL_TAG = "rl"
 RL_METHODS = ["%s%d" % (RL_TAG, s) for s in RL_SEEDS]
@@ -71,7 +75,7 @@ COND_LABEL = {
     "crew0.75": "Crew $\\times0.75$", "crew1.25": "Crew $\\times1.25$",
 }
 METHOD_LABEL = {"edd": "EDD", "wspt": "WSPT", "atc": "ATC", "pfifo": "pFIFO",
-                "mor": "MOR", "random": "Random"}
+                "lpt": "LPT", "random": "Random"}
 PRIORITIES = [1, 2, 3, 4]
 
 
@@ -191,7 +195,9 @@ def main(argv=None):
     if not csv_path.exists():
         sys.exit("results csv not found: %s (run scripts/p4_sensitivity.py "
                  "first)" % csv_path)
-    df = pd.read_csv(csv_path)
+    # Archived v1.0 files carry method=="mor" for the rule now named
+    # "lpt" (R4.1); normalise on read so they keep working unedited.
+    df = normalize_method_column(pd.read_csv(csv_path))
 
     n_rows = len(df)
     n_infeas = int((df["feasible"] != 1).sum())

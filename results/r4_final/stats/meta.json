@@ -1,0 +1,46 @@
+{
+  "generated": "2026-08-19T17:58:17",
+  "input_csv": "results/r4_final/results.csv",
+  "rows": 26770,
+  "infeasible_rows": 0,
+  "value_col": "wwt",
+  "methods": [
+    "atc",
+    "edd",
+    "lpt",
+    "pfifo",
+    "random",
+    "wmdd",
+    "wspt",
+    "rollcp2",
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310"
+  ],
+  "references": [
+    "edd",
+    "atc",
+    "wmdd"
+  ],
+  "scope_cols": [
+    "regime",
+    "crew_multiplier"
+  ],
+  "policy_tag": "v2rl",
+  "n_boot": 10000,
+  "seed": 12345,
+  "alpha": 0.05,
+  "margin_abs": 1.0,
+  "margin_rel": 0.01,
+  "n_configs": 887,
+  "n_clusters": 527,
+  "cluster_check": null,
+  "has_u_realized": true
+}

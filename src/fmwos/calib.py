@@ -30,8 +30,10 @@ fired.
 
 Crew size, per (campus, trade)
 ------------------------------
-crew = max(1, ceil(p95(weekly summed LaborHours) / 40)), computed on train
-years (WOStartDate <= 2017-12-31). Weekly hours are summed over ISO weeks that
+crew = max(1, ceil(quantile_q(weekly summed LaborHours) / 40)), computed on
+train years (WOStartDate <= 2017-12-31), with q = ``CREW_Q`` = 0.95 by default
+(other quantiles are a sensitivity knob, not a corpus change: ``build_capacity``
+takes ``q``). Weekly hours are summed over ISO weeks that
 have >= 1 order (observed weekly trade-hours). Trades with < 1000 rows in a
 campus across *all* years are merged into "MISC" for that campus *before* the
 capacity computation (the interface spec).
@@ -50,6 +52,7 @@ TRAIN_END = pd.Timestamp("2017-12-31 23:59:59")
 RARE_FRAC = 0.005        # < 0.5% of a campus's CM rows -> "rare"
 MISC_MIN_ROWS = 1000     # trades below this (all years) merge into MISC
 CREW_HOURS = 40.0        # one crew-week of capacity, in bh
+CREW_Q = 0.95            # quantile of observed weekly trade-hours sizing a crew
 MISSING_TOKEN = "<MISSING>"
 
 
@@ -122,12 +125,23 @@ def _spearman(x: np.ndarray, y: np.ndarray) -> float:
     return float(np.corrcoef(rx, ry)[0, 1])
 
 
-def build_priority_mapping(clean: pd.DataFrame) -> pd.DataFrame:
+def build_priority_mapping(clean: pd.DataFrame,
+                           fit_end: pd.Timestamp | str | None = None) -> pd.DataFrame:
     """Return the v2 per-campus priority mapping table.
 
     One row per (campus, raw value, pm/cm split) with evidence columns:
     rows, median_cm_duration_days (null for pm rows), pm_share_of_value,
     mapped_class, rule (r5a/r5b/r5c/r5d), spearman_rho + direction (r5c only).
+
+    ``fit_end`` (default None = all years, the v1.0 behaviour) restricts every
+    statistic that defines the mapping -- value counts, the rare cut, the CM
+    total, the median completion durations, the Spearman rho and the common-
+    value set -- to rows with ``WOStartDate <= fit_end``. The resulting table is
+    still applied to ALL rows unchanged by ``priority_class_series``; a raw
+    value first seen after ``fit_end`` is absent from the table and falls back
+    to 4-if-PM-else-3 there. Fitting on the training period only (corpus v1.1,
+    ``fit_end`` = ``TRAIN_END``) keeps the test period out of the benchmark's
+    own construction.
     """
     is_pm = clean["is_pm"].fillna(False).astype(bool).to_numpy()
     dur_days = (
@@ -140,6 +154,9 @@ def build_priority_mapping(clean: pd.DataFrame) -> pd.DataFrame:
         "is_pm_split": np.where(is_pm, "pm", "cm"),
         "dur_days": dur_days,
     })
+    if fit_end is not None:
+        keep = (clean["WOStartDate"] <= pd.Timestamp(fit_end)).to_numpy()
+        base = base[keep]
 
     rows: list[dict] = []
     for campus, sub in base.groupby("campus"):
@@ -243,11 +260,14 @@ def priority_class_series(clean: pd.DataFrame, mapping: pd.DataFrame) -> pd.Seri
 # --------------------------------------------------------------------------- #
 # Crew capacity                                                               #
 # --------------------------------------------------------------------------- #
-def build_capacity(clean: pd.DataFrame, trade_m: pd.Series) -> pd.DataFrame:
+def build_capacity(clean: pd.DataFrame, trade_m: pd.Series,
+                   q: float = CREW_Q) -> pd.DataFrame:
     """Return the per-(campus,trade) capacity table.
 
     Covers every (campus, trade_m) present in *any* year so instances always
-    have >= 1 technician for a work order's trade; p95 uses train years only.
+    have >= 1 technician for a work order's trade; the weekly-hours quantile
+    ``q`` (default ``CREW_Q`` = 0.95) uses train years only. The emitted column
+    is named ``p95_weekly_hours`` for every ``q``, so the schema is stable.
     """
     df = clean[["UniversityID", "WOStartDate", "LaborHours"]].copy()
     df["trade_m"] = trade_m.to_numpy()
@@ -274,7 +294,7 @@ def build_capacity(clean: pd.DataFrame, trade_m: pd.Series) -> pd.DataFrame:
         except KeyError:
             wser = pd.Series(dtype="float64")
         if len(wser) > 0:
-            p95 = float(np.quantile(wser.to_numpy(), 0.95))
+            p95 = float(np.quantile(wser.to_numpy(), q))
         else:
             p95 = 0.0
         crew = max(1, int(math.ceil(p95 / CREW_HOURS)))
@@ -287,18 +307,25 @@ def build_capacity(clean: pd.DataFrame, trade_m: pd.Series) -> pd.DataFrame:
     return cap.sort_values(["campus", "trade"]).reset_index(drop=True)
 
 
-def write_calibration(clean: pd.DataFrame, out_dir: str | Path):
-    """Compute + write both calibration tables. Returns (mapping, capacity, tmap)."""
+def write_calibration(clean: pd.DataFrame, out_dir: str | Path,
+                      q: float = CREW_Q,
+                      fit_end: pd.Timestamp | str | None = None):
+    """Compute + write both calibration tables. Returns (mapping, capacity, tmap).
+
+    ``q`` is the weekly-hours quantile behind the crew sizes; ``fit_end``
+    restricts the priority mapping's fit window (see ``build_priority_mapping``).
+    The defaults reproduce the released v1.0 tables exactly.
+    """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    mapping = build_priority_mapping(clean)
+    mapping = build_priority_mapping(clean, fit_end=fit_end)
     mapping = mapping[mapping["campus"].isin(CAMPUSES)].reset_index(drop=True)
     mapping.to_csv(out / "priority_mapping.csv", index=False)
 
     tmap = trade_merge_map(clean)
     trade_m = apply_trade_merge(clean, tmap)
-    capacity = build_capacity(clean, trade_m)
+    capacity = build_capacity(clean, trade_m, q=q)
     capacity = capacity[capacity["campus"].isin(CAMPUSES)].reset_index(drop=True)
     capacity.to_csv(out / "capacity.csv", index=False)
 

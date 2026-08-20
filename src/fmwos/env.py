@@ -37,6 +37,22 @@ variant; all three keep the /100 scale and telescope to -finalWWT/100:
 ``feature_drop`` (None|'urgency'|'workload'|'context') zeroes OUT a feature group
 in every observation (tensor shapes are unchanged, so a checkpoint trained under
 one drop stays load-compatible with another); see ``_DROP_CAND_COLS``.
+
+Preventive visibility (R4.6, docs/protocol.md §R4.6)
+--------------------------------------------------
+``visibility_L`` (business hours; ``None`` = full-instance visibility, ``0.0`` =
+the status quo) makes a preventive order KNOWN ``L`` bh before it is released:
+``known_bh = max(0, release_bh - L)``.  Corrective orders are never known early.
+A known order may inform decisions but may NOT start before ``release_bh``, so it
+sits in ``self.known[trade]`` and only ``_RELEASE`` moves it into ``queue``;
+candidates and rule picks are drawn from ``queue`` only.  That is deliberate: a
+non-delay executor must not exploit knowing the future by idling, and the rolling
+CP-SAT planner (fmwos.rolling) is the executor that may.
+
+``lookahead_features=True`` appends three context columns describing the trade's
+known-but-unreleased work (F_CTX 10 -> 13); the flag exists so every checkpoint
+trained before R4.6 keeps evaluating unchanged at any ``L``.  The effective width
+is published as ``self.f_ctx`` and the trainer sizes the policy from it.
 """
 
 from __future__ import annotations
@@ -56,14 +72,22 @@ from . import lb as _lb
 K_CAND = 64
 F_JOB = 12
 F_CTX = 10
+F_CTX_LOOKAHEAD = 13       # F_CTX + the three R4.6 lookahead columns (c10-c12)
 _WEEK_BH = 40.0            # 5 weekdays x 8 bh
 _EWMA_HALFLIFE = 40.0      # bh; arrival-rate EWMA (ctx feature 7)
 _LN2 = math.log(2.0)
 _EPS = 1e-6
 _TWO_PI = 2.0 * math.pi
 
+# Lookahead-feature windows (R4.6): a shift-length window and a week-length one,
+# both FIXED constants like every other normalization in this file.
+_LA_SHORT_BH = 8.0
+_LA_LONG_BH = 40.0
+_LA_NEXT_CLIP = 5.0        # days; also the "no known release" sentinel
+
 _FREE = 0     # event: a technician becomes available
 _RELEASE = 1  # event: a work order is released
+_KNOWN = 2    # event: a preventive order becomes visible (R4.6), still unreleased
 
 # --------------------------------------------------------------------------- #
 # E5 ablation knobs (the training spec §2 reward variants, §3 feature groups).  #
@@ -79,11 +103,41 @@ FEATURE_DROPS = (None, "urgency", "workload", "context")
 _DROP_CAND_COLS = {"urgency": (1, 2), "workload": (0, 10)}
 
 
+# --------------------------------------------------------------------------- #
+# Visibility semantics (R4.6).  ONE definition, imported by fmwos.rolling too,  #
+# so the environment and the rolling planner can never drift apart.             #
+# --------------------------------------------------------------------------- #
+def known_bh(wo, visibility_L):
+    """Business hour at which ``wo`` becomes KNOWN under visibility ``L``.
+
+    Preventive orders become known ``L`` bh early (``L=None`` = the whole
+    instance is known from bh 0); corrective orders are never known before their
+    release, because the release proxy IS the moment the request appears.
+    """
+    rel = float(wo["release_bh"])
+    if not wo.get("is_pm"):
+        return rel
+    if visibility_L is None:
+        return 0.0
+    return max(0.0, rel - float(visibility_L))
+
+
+def check_visibility_L(visibility_L):
+    """Validate a visibility level; returns it unchanged (None or float >= 0)."""
+    if visibility_L is None:
+        return None
+    L = float(visibility_L)
+    if L < 0.0:
+        raise ValueError("visibility_L must be None or >= 0, got %r" % (visibility_L,))
+    return L
+
+
 class DispatchEnv:
     """Online single-instance dispatch episode (see module docstring)."""
 
     def __init__(self, instance: dict, k_cand: int = K_CAND,
-                 reward_mode: str = "shaped", feature_drop=None):
+                 reward_mode: str = "shaped", feature_drop=None,
+                 visibility_L=0.0, lookahead_features: bool = False):
         self.instance = instance
         self.K = int(k_cand)
         self.meta_id = instance["meta"]["id"]
@@ -95,6 +149,15 @@ class DispatchEnv:
                              % (FEATURE_DROPS, feature_drop))
         self.reward_mode = reward_mode
         self.feature_drop = feature_drop
+        # R4.6 visibility. The default (L=0, no lookahead columns) reproduces
+        # every pre-R4 observation and schedule bit-identically: no _KNOWN event
+        # is ever pushed, so even the event heap's sequence numbers are unchanged.
+        self.visibility_L = check_visibility_L(visibility_L)
+        self.lookahead_features = bool(lookahead_features)
+        # Effective observation dims, published so the trainer/policy size
+        # themselves from the env rather than from module constants.
+        self.f_job = F_JOB
+        self.f_ctx = F_CTX_LOOKAHEAD if self.lookahead_features else F_CTX
 
         # Static per-trade index (technician pools). Every trade present in the
         # work orders is guaranteed >= 1 technician by the instance builder.
@@ -116,6 +179,9 @@ class DispatchEnv:
     # ------------------------------------------------------------------ #
     def _reset_state(self):
         self.queue = {tr: [] for tr in self._all_trades}
+        # Visible but NOT yet startable (R4.6): populated by _KNOWN, emptied by
+        # _RELEASE. Never a candidate; only the context features read it.
+        self.known = {tr: [] for tr in self._all_trades}
         self.idle = {tr: [] for tr in self._all_trades}      # heaps of tech ids
         self.tech_free_at = {}
         for ts in self.techs_of.values():
@@ -160,7 +226,13 @@ class DispatchEnv:
         for tech in self.instance["technicians"]:
             heapq.heappush(events, (0.0, next(seq), _FREE, tech["id"], tech["trade"]))
         for wo in self.instance["work_orders"]:
-            heapq.heappush(events, (float(wo["release_bh"]), next(seq), _RELEASE, wo))
+            rel = float(wo["release_bh"])
+            kb = known_bh(wo, self.visibility_L)
+            if kb < rel:
+                # Only orders that are known STRICTLY before release get an event
+                # (at L=0 there are none, so the heap is byte-for-byte as before).
+                heapq.heappush(events, (kb, next(seq), _KNOWN, wo))
+            heapq.heappush(events, (rel, next(seq), _RELEASE, wo))
 
         while events:
             now = events[0][0]
@@ -173,9 +245,15 @@ class DispatchEnv:
                     tid, trade = payload
                     heapq.heappush(self.idle[trade], tid)
                     touched.add(trade)
+                elif kind == _KNOWN:
+                    wo = payload[0]
+                    self.known[wo["trade"]].append(wo)
+                    # NOT touched: a known order is not startable, so it cannot
+                    # create a dispatch opportunity (and the queue is unchanged).
                 else:  # _RELEASE
                     wo = payload[0]
                     tr = wo["trade"]
+                    self._unknow(tr, wo)
                     self.queue[tr].append(wo)
                     self._on_arrival(tr, now)
                     touched.add(tr)
@@ -201,6 +279,15 @@ class DispatchEnv:
                     self._lb_dirty.add(trade)
                     heapq.heappush(events, (end, next(seq), _FREE, tid, trade))
 
+    def _unknow(self, trade, wo):
+        """Drop ``wo`` from the trade's known list on release (identity scan: the
+        list holds the instance's own dicts, and it is empty at L=0)."""
+        kn = self.known[trade]
+        for i, j in enumerate(kn):
+            if j is wo:
+                del kn[i]
+                return
+
     def _on_arrival(self, trade, now):
         """Update the trade's arrival-rate EWMA and mark its LB dirty."""
         last = self._ewma_last[trade]
@@ -216,16 +303,30 @@ class DispatchEnv:
         """Run one episode driving ``pick_fn(queue, t, rng) -> job``.
 
         Reproduces ``fmwos.pdrs.dispatch`` when ``pick_fn`` is a pdrs rule.
+
+        A rule carrying ``wants_visibility = True`` (the forecast-aware ATC of
+        R4.6) is called as ``pick_fn(queue, t, rng, view)`` instead, with
+        ``view = {"known": <the trade's known orders>, "crew": <trade crew>}``.
+        It still picks from ``queue``: visibility informs the score, never the
+        set of startable jobs.
+
         Returns a schedule dict (the interface spec).
         """
         t0 = time.perf_counter()
         self._reset_state()
         rng = random.Random(seed)
+        wants_view = bool(getattr(pick_fn, "wants_visibility", False))
         gen = self._driver()
         try:
             next(gen)
             while True:
-                job = pick_fn(self.queue[self._cur_trade], self._cur_now, rng)
+                trade = self._cur_trade
+                if wants_view:
+                    view = {"known": self.known[trade],
+                            "crew": self.k_of.get(trade, 1) or 1}
+                    job = pick_fn(self.queue[trade], self._cur_now, rng, view)
+                else:
+                    job = pick_fn(self.queue[trade], self._cur_now, rng)
                 gen.send(job)
         except StopIteration:
             pass
@@ -294,7 +395,14 @@ class DispatchEnv:
     # ------------------------------------------------------------------ #
     def _phi(self, t):
         """Phi(s) = realized(s) + LB(s), with per-trade LB caching keyed on
-        (dirty, t) so stale-time reuse never happens (LB depends on t)."""
+        (dirty, t) so stale-time reuse never happens (LB depends on t).
+
+        Visibility (R4.6) does NOT enter the potential: the admissibility
+        argument for LB conditions on released work only (the bound relaxes the
+        queued jobs onto their trade's technicians from time t), and known but
+        unreleased orders cannot be started, so folding them in would break both
+        admissibility and the telescoping identity that Phi(s_0) = 0 gives.
+        The reward is therefore identical at every L."""
         total = self._realized
         for trade in self._all_trades:
             q = self.queue[trade]
@@ -354,7 +462,7 @@ class DispatchEnv:
     def _zeros_obs(self):
         return {"cand": np.zeros((self.K, F_JOB), dtype=np.float32),
                 "mask": np.zeros((self.K,), dtype=bool),
-                "ctx": np.zeros((F_CTX,), dtype=np.float32)}
+                "ctx": np.zeros((self.f_ctx,), dtype=np.float32)}
 
     @staticmethod
     def _fill_job_features(out, job, t, qtw):
@@ -386,7 +494,7 @@ class DispatchEnv:
         out[11] = math.log1p(w / p) if p > 0 else 0.0
 
     def _ctx_features(self, trade, t, q, qtw):
-        ctx = np.zeros((F_CTX,), dtype=np.float32)
+        ctx = np.zeros((self.f_ctx,), dtype=np.float32)
         nq = len(q)
         k = self.k_of.get(trade, 1) or 1
         # 1 |Q_g| / 32
@@ -416,7 +524,41 @@ class DispatchEnv:
         ctx[8] = math.cos(ang)
         # 10 episode progress proxy: t / 40
         ctx[9] = t / _WEEK_BH
+        if self.lookahead_features:
+            self._fill_lookahead_features(ctx, trade, t, k)
         return ctx
+
+    def _fill_lookahead_features(self, ctx, trade, t, k):
+        """Append the R4.6 lookahead columns c10-c12 (spec §S1).
+
+        They describe the trade's KNOWN but unreleased work, in the same
+        days-per-technician units as the backlog column, so a policy can compare
+        the wave that is coming with the queue it already holds.  At L=0 the
+        known list is always empty, so the three columns are the constants
+        (0, 0, 5) -- which is exactly what makes the L=0 control arm an
+        information control at identical capacity.
+        """
+        short_load = long_load = 0.0
+        next_rel = None
+        for j in self.known[trade]:
+            r = float(j["release_bh"])
+            p = float(j["p_bh"])
+            if r <= t + _LA_SHORT_BH:
+                short_load += p
+            if r <= t + _LA_LONG_BH:
+                long_load += p
+            if next_rel is None or r < next_rel:
+                next_rel = r
+        # 11 known work releasing within 8 bh, in days per technician
+        ctx[10] = short_load / (_LA_SHORT_BH * k)
+        # 12 the same over the 40 bh window
+        ctx[11] = long_load / (_LA_LONG_BH * k)
+        # 13 days to the trade's next known release, clipped [0, 5] (5 = none)
+        if next_rel is None:
+            ctx[12] = _LA_NEXT_CLIP
+        else:
+            d = (next_rel - t) / 8.0
+            ctx[12] = 0.0 if d < 0.0 else (_LA_NEXT_CLIP if d > _LA_NEXT_CLIP else d)
 
     # ------------------------------------------------------------------ #
     # Schedule output                                                    #

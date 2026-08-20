@@ -32,7 +32,7 @@ FIXTURE = os.path.join(_ROOT, "tests", "fixtures", "tiny_instance.json")
 REAL_GLOB = os.path.join(
     _ROOT, "data", "processed", "instances", "c05", "replay", "150", "*.json"
 )
-PDR_RULES = ["edd", "wspt", "atc", "pfifo", "mor"]
+PDR_RULES = ["edd", "wspt", "atc", "pfifo", "lpt"]
 HAND_OPTIMUM = 32.0
 SEED = 301
 TOL = 1e-6

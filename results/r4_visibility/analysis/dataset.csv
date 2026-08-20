@@ -1,0 +1,4 @@
+scope,n_rows,n_ids,n_configs,n_clusters,n_levels,n_methods,n_infeasible,n_constant_rows,n_errors,elapsed_seconds
+all,50256,4320,1080,720,4,35,0,12960,0,6353.331
+vis-gen,24840,2160,540,540,4,34,0,6480,0,6353.331
+vis-empirical,25416,2160,540,180,4,35,0,6480,0,6353.331

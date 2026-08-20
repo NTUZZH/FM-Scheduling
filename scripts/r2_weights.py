@@ -11,7 +11,7 @@ weight vectors mapped by priority class (P1,P2,P3,P4):
 
 The weight vector is injected into BOTH the rule scoring AND the objective:
 WSPT and ATC score with w/p, so their DISPATCH DECISIONS change with the vector
-(EDD/pFIFO/MOR/random ignore weight, but their relative standing in the
+(EDD/pFIFO/LPT/random ignore weight, but their relative standing in the
 weighted-tardiness objective still moves because the objective is reweighted).
 due_bh (SLA per priority) is untouched -- only weight_j changes.
 
@@ -47,6 +47,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT / "src"))
 
 from fmwos import pdrs                       # noqa: E402
+from fmwos.io import normalize_method_column  # noqa: E402
 from fmwos.validator import validate          # noqa: E402
 
 INST_ROOT = _ROOT / "data" / "processed" / "instances"
@@ -57,7 +58,7 @@ P4_BASELINE_CSV = _ROOT / "results" / "p4_sensitivity" / "results.csv"
 CAMPUSES = [5, 9, 10, 12]
 SIZES = [150, 400]
 N_BASE = 30
-RULES = ["edd", "wspt", "atc", "pfifo", "mor", "random"]
+RULES = ["edd", "wspt", "atc", "pfifo", "lpt", "random"]
 SEED = 301
 
 # (label, (w_P1, w_P2, w_P3, w_P4)). "baseline" MUST be first (it is the
@@ -155,7 +156,8 @@ def _regression_guard(rows):
         print("  [guard] p4_sensitivity results.csv absent -- skipping "
               "cross-check")
         return None
-    df = pd.read_csv(P4_BASELINE_CSV)
+    # Archived v1.0 file: method=="mor" is the rule now named "lpt" (R4.1).
+    df = normalize_method_column(pd.read_csv(P4_BASELINE_CSV))
     sub = df[(df["condition"] == "baseline") & (df["campus"] == 5)
              & (df["size"] == 150) & (df["feasible"] == 1)]
     ok = True

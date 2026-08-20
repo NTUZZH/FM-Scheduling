@@ -1,0 +1,174 @@
+{
+  "experiment": "r4_final_eval",
+  "protocol": "docs/protocol.md R4.4 / docs/protocol.md §R4 (design S2)",
+  "date": "2026-08-19",
+  "start_time": "2026-08-19T16:46:06",
+  "end_time": "2026-08-19T17:55:27",
+  "elapsed_seconds": 4161.03,
+  "workers": 10,
+  "smoke": false,
+  "eval_set": "final",
+  "index_csv": "./data/processed/instances_r4/index_r4.csv",
+  "v1_fallback": false,
+  "out_dir": "./results/r4_final",
+  "frozen_methods": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random",
+    "rl301",
+    "rl302",
+    "rl303",
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310",
+    "v2at301",
+    "v2at302",
+    "v2at303",
+    "v2at304",
+    "v2at305",
+    "v2at306",
+    "v2at307",
+    "v2at308",
+    "v2at309",
+    "v2at310",
+    "rollcp2"
+  ],
+  "frozen_rules": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random"
+  ],
+  "frozen_policies": [
+    {
+      "tag": "rl",
+      "dir": "./results/p3_train",
+      "arch": "mlp",
+      "seeds": [
+        301,
+        302,
+        303
+      ]
+    },
+    {
+      "tag": "v2rl",
+      "dir": "./results/p3_train/v2",
+      "arch": "mlp",
+      "seeds": [
+        301,
+        302,
+        303,
+        304,
+        305,
+        306,
+        307,
+        308,
+        309,
+        310
+      ]
+    },
+    {
+      "tag": "v2at",
+      "dir": "./results/p3_train/v2attn",
+      "arch": "attn",
+      "seeds": [
+        301,
+        302,
+        303,
+        304,
+        305,
+        306,
+        307,
+        308,
+        309,
+        310
+      ]
+    }
+  ],
+  "methods_this_run": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random",
+    "rl301",
+    "rl302",
+    "rl303",
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310",
+    "v2at301",
+    "v2at302",
+    "v2at303",
+    "v2at304",
+    "v2at305",
+    "v2at306",
+    "v2at307",
+    "v2at308",
+    "v2at309",
+    "v2at310",
+    "rollcp2"
+  ],
+  "pdr_seed": 301,
+  "rollcp_budget_s": 2.0,
+  "cpsat_workers": 2,
+  "torch_threads": 2,
+  "crew_multipliers": {
+    "verdict_campuses": [
+      5,
+      9,
+      10,
+      12
+    ],
+    "verdict": [
+      1.0,
+      0.8,
+      0.6
+    ],
+    "other": [
+      1.0
+    ]
+  },
+  "n_configs": 887,
+  "n_configs_by_regime": {
+    "final-empirical": 587,
+    "final-gen": 300
+  },
+  "n_rollcp": 160,
+  "rollcp_per_cell": 8,
+  "no_rollcp": false,
+  "n_pending_this_run": 887,
+  "n_completed_this_run": 887,
+  "n_errors_this_run": 0,
+  "n_rows": 26770,
+  "n_infeasible": 0,
+  "filters": {
+    "campus": null,
+    "size": null,
+    "limit": null
+  },
+  "git_describe": "paper-v4-21-g87790ec6"
+}

@@ -17,7 +17,8 @@ here so the whole pipeline is reproducible from the raw CSV):
   R7 aggregate duplicate (UniversityID, WOID) rows into one work order:
      31% of cleaned rows belong to work orders recorded across multiple labor lines (same
      start/end, hours split across lines). LaborHours = sum, WOStartDate = min,
-     WOEndDate = max, all other fields from the dominant row (max LaborHours).
+     WOEndDate = max, all other fields from the dominant row (max LaborHours;
+     ties broken by the ``dominant_sort`` argument of ``clean``).
   R5 priority mapped onto 4 classes P1..P4 by the dataset's own empirical
      distribution (see calib.py); raw value preserved in `priority_raw`.
   R6 trade = top-level UNIFORMAT system code (SystemCode letter+first digits,
@@ -104,8 +105,29 @@ def load_raw(path: str | Path, nrows: int | None = None) -> pd.DataFrame:
     return df
 
 
-def clean(df: pd.DataFrame, labor_cap_q: float = 0.995) -> tuple[pd.DataFrame, dict]:
-    """Apply R2-R4, R6. Returns (clean_df, audit dict with per-rule row counts)."""
+def clean(df: pd.DataFrame, labor_cap_q: float = 0.995,
+          dominant_sort: str = "legacy") -> tuple[pd.DataFrame, dict]:
+    """Apply R2-R4, R6. Returns (clean_df, audit dict with per-rule row counts).
+
+    ``dominant_sort`` selects how R7 breaks a tie between labor lines that
+    report the same LaborHours, which is the common case rather than an edge
+    case: 49% of the multi-line work orders have all their line hours equal, so
+    the "dominant" line is undefined on hours alone, and it is the line that
+    supplies trade, priority, building and PM flag.
+
+    - ``"legacy"`` (default, corpus v1.0): ``sort_values("LaborHours",
+      ascending=False)`` with pandas' default quicksort. The winner is
+      reproducible for a fixed pandas version and a fixed input order, but it
+      is an arbitrary line, not a chosen one.
+    - ``"stable"`` (corpus v1.1): sort the frame back into raw-file order
+      (``sort_index``), then ``sort_values(["LaborHours"], ascending=False,
+      kind="stable")``, so among equal-hours lines the FIRST line in file order
+      wins. The rule is then stated rather than inherited from a sort
+      implementation. (Tie order verified on the pinned pandas 3.0.3.)
+    """
+    if dominant_sort not in ("legacy", "stable"):
+        raise ValueError("dominant_sort must be 'legacy' or 'stable', got "
+                         f"{dominant_sort!r}")
     audit: dict[str, float | int] = {"rows_in": len(df)}
 
     m2 = df["WOID"].notna() & df["UniversityID"].notna() & df["WOStartDate"].notna()
@@ -128,7 +150,12 @@ def clean(df: pd.DataFrame, labor_cap_q: float = 0.995) -> tuple[pd.DataFrame, d
     df["_end_max"] = df.groupby(["UniversityID", "WOID"], observed=True)[
         "WOEndDate"
     ].transform("max")
-    df = df.sort_values("LaborHours", ascending=False).drop_duplicates(
+    if dominant_sort == "stable":
+        ordered = df.sort_index().sort_values(
+            ["LaborHours"], ascending=False, kind="stable")
+    else:
+        ordered = df.sort_values("LaborHours", ascending=False)
+    df = ordered.drop_duplicates(
         subset=["UniversityID", "WOID"], keep="first"
     )
     df["LaborHours"] = df["_hours_sum"]
@@ -150,3 +177,31 @@ def clean(df: pd.DataFrame, labor_cap_q: float = 0.995) -> tuple[pd.DataFrame, d
     audit["rows_out"] = len(df)
     audit["pm_share"] = float(df["is_pm"].mean())
     return df, audit
+
+
+# --------------------------------------------------------------------------- #
+# Method-name normalisation for archived result files.
+#
+# Revision R4.1 renames the dispatching rule "mor" to "lpt"; the rule itself is
+# unchanged (longest processing time within the trade queue).  The released v1.0
+# result CSVs still carry method=="mor" and are never edited, so every reader
+# maps the archived name onto the current one at load time.
+# --------------------------------------------------------------------------- #
+NORMALIZE_METHOD = {"mor": "lpt"}
+
+
+def normalize_method(name):
+    """Map one archived method string onto its current name (R4.1)."""
+    return NORMALIZE_METHOD.get(str(name), str(name))
+
+
+def normalize_method_series(s: pd.Series) -> pd.Series:
+    """Vectorised :func:`normalize_method` for a results file's method column."""
+    return s.astype("object").replace(NORMALIZE_METHOD)
+
+
+def normalize_method_column(df: pd.DataFrame, column: str = "method") -> pd.DataFrame:
+    """Return ``df`` with its method column normalised in place (R4.1)."""
+    if column in df.columns:
+        df[column] = normalize_method_series(df[column])
+    return df

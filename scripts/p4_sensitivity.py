@@ -22,7 +22,7 @@ Conditions (5) -- each a pure transform of the base instance
 
 Methods per config
 ------------------
-  PDRs : edd, wspt, atc, pfifo, mor, random   (seed 301)
+  PDRs : edd, wspt, atc, pfifo, lpt, random   (seed 301)
   RL   : rl301, rl302, rl303  (greedy argmax, results/p3_train/seed<t>/best.pt,
          via the DispatchEnv reset()/step() path on CPU; tag/dir reconfigurable
          with --rl-tag / --rl-dir).
@@ -101,7 +101,7 @@ CONDITIONS = [
 ]
 _COND_ORDER = {name: i for i, (name, _f, _m) in enumerate(CONDITIONS)}
 
-PDR_RULES = ["edd", "wspt", "atc", "pfifo", "mor", "random"]
+PDR_RULES = ["edd", "wspt", "atc", "pfifo", "lpt", "random"]
 RL_SEEDS = [301, 302, 303]
 # RL naming + checkpoint root are reconfigurable (--rl-tag/--rl-dir); rederived
 # in the parent before the pool is forked so every worker inherits the set.

@@ -8,9 +8,16 @@ Design follows the dataviz skill: fixed categorical order, CVD-validated palette
 direct labels per the skill's secondary-encoding rule), thin marks, hairline
 recessive axes, selective direct labels, legend for >=2 series, no dual axes.
 
-Method -> color map is FROZEN and identical across every figure.
+Method -> color map is FROZEN and identical across every figure, here and in
+scripts/r4_figures.py: the revision added WMDD (a lighter tint of the weighted
+due-date violet) and moved the two diagnostic floors onto neutral greys, and
+nothing else changed.
 
-  conda activate fjsp && python scripts/p5_figures.py [f1 f2 f3 f4 f5 f6]
+The revision moved the utilisation curves, the decision map and the robustness
+matrix to scripts/r4_figures.py, which reads the definitive final-evaluation
+analysis; this script now builds f1, f2 and f5 only.
+
+  conda activate fjsp && python scripts/p5_figures.py [f1 f2 f5]
 """
 import sys, math
 import numpy as np
@@ -27,6 +34,14 @@ from pathlib import Path
 
 ROOT = str(Path(__file__).resolve().parents[1])
 FIGDIR = f"{ROOT}/paper/figures"
+
+sys.path.insert(0, f"{ROOT}/src")
+from fmwos.io import normalize_method_column  # noqa: E402
+
+# Archived v1.0 result files carry method=="mor" for the rule now named "lpt"
+# (R4.1). They are never edited, so every read normalises the method column.
+def read_results(path, **kw):
+    return normalize_method_column(pd.read_csv(path, **kw))
 
 # ----------------------------------------------------------------------------
 # Design tokens (dataviz reference palette, light surface)
@@ -45,15 +60,19 @@ CMAP = {
     "edd":   "#008300",  # green
     "pfifo": "#8f8d86",  # muted gray (non-focal; ~edd by construction)
     "atc":   "#4a3aa7",  # violet
+    # WMDD joins the suite in the revision. It shares the weighted due-date
+    # family with ATC, so it takes a lighter tint of the same violet: the
+    # kinship is visible, the two stay separable in print and in greyscale.
+    "wmdd":  "#7f6bc4",  # light violet
     "wspt":  "#eb6834",  # orange
-    "mor":   "#e34948",  # red (collapse)
+    "lpt":   "#e34948",  # red (collapse)
     "random":"#c0beb6",  # light muted gray (non-focal floor)
     "ga":    "#eda100",  # yellow
     "cpsat": "#e87ba4",  # magenta (cpsat60 / cpsat300)
     "roll":  "#1baf7a",  # aqua (Rolling CP-SAT)
     "policy":"#2a78d6",  # blue (learned policy, protagonist)
 }
-PRETTY = {"edd":"EDD","pfifo":"pFIFO","atc":"ATC","wspt":"WSPT","mor":"MOR",
+PRETTY = {"edd":"EDD","pfifo":"pFIFO","atc":"ATC","wmdd":"WMDD","wspt":"WSPT","lpt":"LPT",
           "random":"Random","ga":"GA","cpsat":"CP-SAT","cpsat60":"CP-SAT 60s",
           "cpsat300":"CP-SAT 300s","roll":"Rolling CP-SAT","policy":"Policy"}
 
@@ -65,6 +84,29 @@ def mcol(m):
     if m.startswith("rollcp") or m == "roll": return CMAP["roll"]
     if m.startswith("cpsat"): return CMAP["cpsat"]
     return CMAP.get(m, MUTE)
+
+# The two diagnostic-floor rules take the neutral greys scripts/r4_figures.py
+# gives them on the utilisation curves, so LPT and Random read the same way in
+# every figure of the paper and no red/green pair is left carrying meaning
+# (EDD is the green one).
+FLOOR_GREY = {"lpt": "#6f6d66", "random": "#a8a69e"}
+
+
+def suite_color(m):
+    """mcol(), with the diagnostic floors on the shared neutral greys."""
+    return FLOOR_GREY.get(m.lower(), mcol(m))
+
+
+def pastel(color, amount=0.58):
+    """The house pastel tint of a method hue, for an AREA fill.
+
+    Area fills (bars, patches, spans) are pastel and thin marks (markers,
+    lines, edges) keep the medium hue, so a filled figure never carries a dark
+    block. ``amount`` is the fraction of the chart surface mixed in.
+    """
+    r, g, b = mpl.colors.to_rgb(color)
+    sr, sg, sb = mpl.colors.to_rgb(SURF)
+    return (r + (sr - r) * amount, g + (sg - g) * amount, b + (sb - b) * amount)
 
 # ----------------------------------------------------------------------------
 # Matplotlib rcParams tuned for cas-dc print sizes
@@ -82,8 +124,11 @@ def set_style():
         "xtick.labelsize": 6.6, "ytick.labelsize": 6.6, "legend.fontsize": 6.6,
         "axes.edgecolor": AXIS, "axes.linewidth": 0.5,
         "axes.labelcolor": INK, "text.color": INK,
+        # Tick MARKS may stay grey (they are not type); every text element on a
+        # figure of this paper is black, hierarchy coming from size, weight and
+        # italics, as in scripts/r4_figures.py.
         "xtick.color": MUTE, "ytick.color": MUTE,
-        "xtick.labelcolor": INK2, "ytick.labelcolor": INK2,
+        "xtick.labelcolor": INK, "ytick.labelcolor": INK,
         "axes.grid": False, "grid.color": GRID, "grid.linewidth": 0.5,
         "xtick.major.width": 0.5, "ytick.major.width": 0.5,
         "xtick.major.size": 2.2, "ytick.major.size": 2.2,
@@ -102,7 +147,8 @@ def figsize(w_mm, h_mm): return (w_mm*MM, h_mm*MM)
 def style_ax(ax):
     ax.set_facecolor(SURF)
     for s in ("left","bottom"): ax.spines[s].set_color(AXIS); ax.spines[s].set_linewidth(0.5)
-    ax.tick_params(length=2.2, width=0.5, colors=MUTE)
+    # tick MARKS grey, tick LABELS black (colors= would grey the labels too)
+    ax.tick_params(length=2.2, width=0.5, color=MUTE, labelcolor=INK)
     return ax
 
 def save(fig, name, tight=True):
@@ -117,6 +163,28 @@ def fmt_wwt(v):
     if v < 1000: return f"{v:.0f}"
     return f"{v/1000:.1f}k"
 
+def label_ladder(logvals, minsep):
+    """Least-displacement direct-label heights on a log axis.
+
+    ``logvals`` are the log10 heights of the points to be labelled, ascending.
+    Returns the log10 heights of their labels: the isotonic (pool-adjacent-
+    violators) solution of  min sum (l_i - y_i)^2  s.t.  l_{i+1} - l_i >= minsep,
+    so every label keeps a readable gap from its neighbours while moving as
+    little as possible from its own point. Greedily pushing each label up
+    instead piles the whole displacement onto the topmost label of a converging
+    bundle, which is what makes a leader necessary and then hard to follow.
+    """
+    z = [v - minsep * i for i, v in enumerate(logvals)]
+    lev, cnt = [], []
+    for v in z:
+        lev.append(v); cnt.append(1)
+        while len(lev) > 1 and lev[-2] > lev[-1] + 1e-12:
+            n = cnt[-2] + cnt[-1]
+            v2 = (lev[-2] * cnt[-2] + lev[-1] * cnt[-1]) / n
+            lev[-2:], cnt[-2:] = [v2], [n]
+    fit = [v for v, n in zip(lev, cnt) for _ in range(n)]
+    return [f + minsep * i for i, f in enumerate(fit)]
+
 # ============================================================================
 # F1  pipeline schematic
 # ============================================================================
@@ -124,7 +192,8 @@ def fig1_pipeline():
     fig = plt.figure(figsize=figsize(180, 74))
     ax = fig.add_axes([0,0,1,1]); ax.set_xlim(0,180); ax.set_ylim(0,74); ax.axis("off")
 
-    def box(x, y, w, h, title, sub=None, fc=SURF, ec=AXIS, tc=INK, lw=0.8, accent=None, fs=7.2):
+    def box(x, y, w, h, title, sub=None, fc=SURF, ec=AXIS, tc=INK, lw=0.8, accent=None, fs=7.2,
+            fs_sub=6.1):
         p = FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.6,rounding_size=1.8",
                            linewidth=lw, edgecolor=ec, facecolor=fc, zorder=2)
         ax.add_patch(p)
@@ -135,7 +204,7 @@ def fig1_pipeline():
                 fontsize=fs, color=tc, weight="bold", zorder=4)
         if sub:
             ax.text(x+w/2+(0.8 if accent else 0), y+h/2-2.4, sub, ha="center", va="center",
-                    fontsize=6.1, color=INK2, zorder=4)
+                    fontsize=fs_sub, color=INK, zorder=4)
         return (x, y, w, h)
 
     def arrow(a, b, side_a="r", side_b="l", color=MUTE, lw=1.0, rad=0.0):
@@ -151,8 +220,8 @@ def fig1_pipeline():
     arrow(b_src, b_cln, "b", "t", lw=1.1)
 
     # --- stage 2: two tracks ---
-    b_rep = box(43, 49, 40, 13, "[R] Replay track", "first-N releases, non-overlap", accent=CMAP["edd"])
-    b_gen = box(43, 22, 40, 13, "[C] Generator track", "fitted packs + contention knobs", accent=CMAP["wspt"])
+    b_rep = box(43, 49, 40, 13, "[R] Empirical track", "first-N releases, non-overlap", accent=CMAP["edd"])
+    b_gen = box(43, 22, 40, 13, "[C] Generator track", "fitted packs + contention parameters", accent=CMAP["wspt"], fs_sub=5.7)
     arrow(b_cln, b_rep, "r", "l", rad=-0.18, lw=1.1)
     arrow(b_cln, b_gen, "r", "l", rad=0.12, lw=1.1)
 
@@ -160,7 +229,14 @@ def fig1_pipeline():
     # counts are COMPUTED from the released result files so the schematic can
     # never drift out of sync with what was actually evaluated.
     _e1 = pd.read_csv(f"{ROOT}/results/e1_static/results.csv", usecols=["id"])
-    _dy = pd.read_csv(f"{ROOT}/results/p4_dyneval/results.csv",
+    # The dynamic sweep is re-run per corpus version; take the live file when it
+    # exists and the archived one otherwise, and say which was used, so the
+    # count is always read from a results file rather than typed in.
+    _dyn_paths = [f"{ROOT}/results/p4_dyneval/results.csv",
+                  f"{ROOT}/results/_v10_archive/p4_dyneval/results.csv"]
+    _dyn_src = next(p for p in _dyn_paths if Path(p).exists())
+    print(f"   f1 dynamic-configuration count read from {_dyn_src}")
+    _dy = pd.read_csv(_dyn_src,
                       usecols=["id", "regime", "crew_multiplier",
                                "arrival_multiplier", "pm_share_override"])
     _n_static = _e1["id"].nunique()
@@ -174,27 +250,32 @@ def fig1_pipeline():
     # --- stage 4: methods suite ---
     b_met = box(131, 35, 46, 15, "", None, accent=INK2)
     ax.text(155.5, 47.4, "Methods suite", ha="center", va="center", fontsize=7.2, color=INK, weight="bold", zorder=5)
-    chips = [("EDD","edd"),("ATC","atc"),("WSPT","wspt"),("MOR","mor"),("pFIFO","pfifo"),
-             ("Rand","random"),("GA","ga"),("CP","cpsat"),("Roll","roll"),("Policy","policy")]
-    col_x = [133.5, 142.1, 150.7, 159.3, 167.9]; row_y = [43.0, 38.4]
-    for i,(lab,key) in enumerate(chips):
-        xx = col_x[i % 5]; yy = row_y[i // 5]
-        ax.add_patch(Rectangle((xx, yy), 1.9, 1.9, facecolor=mcol(key), edgecolor="none", zorder=4))
-        ax.text(xx+2.3, yy+0.95, lab, ha="left", va="center", fontsize=5.6, color=INK2, zorder=4)
+    # The first two rows hold the seven dispatching rules, the third the three
+    # search-based schedulers and the learned policy; the gap that ends row two
+    # is the break between the two groups, so the box reads as the caption does.
+    chips = [("EDD","edd"),("pFIFO","pfifo"),("WSPT","wspt"),("ATC","atc"),
+             ("WMDD","wmdd"),("LPT","lpt"),("Random","random"),
+             ("GA","ga"),("CP-SAT","cpsat"),("Rolling","roll"),("Policy","policy")]
+    col_x = [133.5, 144.3, 155.1, 165.9]; row_y = [43.6, 40.0, 36.4]
+    slots = [(0,0),(0,1),(0,2),(0,3), (1,0),(1,1),(1,2), (2,0),(2,1),(2,2),(2,3)]
+    for (lab,key),(r,c) in zip(chips, slots):
+        xx = col_x[c]; yy = row_y[r]
+        ax.add_patch(Rectangle((xx, yy), 1.9, 1.9, facecolor=suite_color(key), edgecolor="none", zorder=4))
+        ax.text(xx+2.3, yy+0.95, lab, ha="left", va="center", fontsize=5.6, color=INK, zorder=4)
     arrow(b_ins, b_met, "r", "l", lw=1.1)
 
     # --- stage 5: validator + outputs (down) ---
-    b_val = box(131, 11, 46, 13, "Independent validator", "feasibility + weighted tardiness", accent=CMAP["mor"])
+    b_val = box(131, 11, 46, 13, "Independent validator", "feasibility + weighted tardiness", accent=CMAP["lpt"])
     arrow(b_met, b_val, "b", "t", lw=1.1)
     b_out = box(92, 11, 30, 13, "Metrics +\ndecision map", None, accent=CMAP["policy"])
     arrow(b_val, b_out, "l", "r", lw=1.1)
 
     # flow band labels
-    ax.text(18, 66.5, "1  Data + cleaning", fontsize=6.4, color=MUTE, ha="center", style="italic")
-    ax.text(63, 66.5, "2  Two instance tracks", fontsize=6.4, color=MUTE, ha="center", style="italic")
-    ax.text(107, 55.5, "3  Instances", fontsize=6.4, color=MUTE, ha="center", style="italic")
-    ax.text(154, 55.5, "4  Schedulers", fontsize=6.4, color=MUTE, ha="center", style="italic")
-    ax.text(129, 4.5, "5  Score + characterize (independent of the schedulers)", fontsize=6.4, color=MUTE, ha="center", style="italic")
+    ax.text(18, 66.5, "1  Data + cleaning", fontsize=6.4, color=INK, ha="center", style="italic")
+    ax.text(63, 66.5, "2  Two instance tracks", fontsize=6.4, color=INK, ha="center", style="italic")
+    ax.text(107, 55.5, "3  Instances", fontsize=6.4, color=INK, ha="center", style="italic")
+    ax.text(154, 55.5, "4  Schedulers", fontsize=6.4, color=INK, ha="center", style="italic")
+    ax.text(129, 4.5, "5  Score + characterise (independent of the schedulers)", fontsize=6.4, color=INK, ha="center", style="italic")
 
     save(fig, "f1_pipeline")
 
@@ -202,45 +283,64 @@ def fig1_pipeline():
 # F2  static benchmark (2 panels)
 # ============================================================================
 def fig2_static():
-    e1 = pd.read_csv(f"{ROOT}/results/e1_static/results.csv")
+    e1 = read_results(f"{ROOT}/results/e1_static/results.csv")
     piv = e1.pivot_table(index="id", columns="method", values="wwt", aggfunc="first")
     bk = piv.min(axis=1); nz = bk > 1e-9
     gap = piv.sub(bk, axis=0)
     lat = e1.groupby("method")["wall_seconds"].mean() * 1000.0  # ms
 
-    order = ["cpsat300","cpsat60","ga","atc","wspt","pfifo","edd","random","mor"]
+    order = ["cpsat300","cpsat60","ga","wmdd","atc","wspt","pfifo","edd","random","lpt"]
     gaps = {m: gap[m][nz].mean() for m in order}
     ga_beats = int((piv["ga"] < piv["cpsat60"] - 1.0).sum())
+    # the bar order is the measured order; assert it rather than trust the list
+    assert list(sorted(order, key=lambda m: gaps[m])) == order, \
+        {m: round(gaps[m], 3) for m in order}
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=figsize(180, 66), gridspec_kw=dict(wspace=0.42))
 
     # ---- Panel A: ordered horizontal bars, log-x gap ----
     style_ax(axA)
     ypos = np.arange(len(order))[::-1]
-    focal = {"cpsat300","cpsat60","ga","atc","mor"}     # emphasize; mute the rest
+    # Every bar carries its own method's hue, the same hue the method has in
+    # panel (b) and in every other figure: pastel for the fill, the medium hue
+    # for the edge. LPT and random ordering keep the neutral greys the whole
+    # paper gives the two diagnostic floors.
     for y, m in zip(ypos, order):
-        c = mcol(m) if m in focal else MUTE
-        alpha = 1.0 if m in focal else 0.55
-        axA.barh(y, gaps[m], height=0.62, color=c, alpha=alpha, edgecolor=SURF, linewidth=0.6, zorder=3)
-        axA.text(gaps[m]*1.14, y, fmt_wwt(gaps[m]), va="center", ha="left", fontsize=6.0, color=INK2, zorder=4)
+        c = suite_color(m)
+        axA.barh(y, gaps[m], height=0.62, color=pastel(c), edgecolor=c,
+                 linewidth=0.7, zorder=3)
+        axA.text(gaps[m]*1.14, y, fmt_wwt(gaps[m]), va="center", ha="left", fontsize=6.0, color=INK, zorder=4)
     axA.set_yticks(ypos)
     axA.set_yticklabels([PRETTY.get(m,m) for m in order], fontsize=6.8, color=INK)
     axA.set_xscale("log")
     axA.set_xlim(0.1, 2200)
     axA.set_xlabel("Mean gap to best-known TWT  (weighted tardiness, log)", fontsize=6.9)
-    axA.xaxis.set_major_formatter(mticker.LogFormatterSciNotation(base=10))
+    # Plain decimal tick labels rather than powers of ten: a superscript
+    # exponent at this tick size prints below 5 pt.
+    axA.xaxis.set_major_locator(mticker.FixedLocator([0.1, 1, 10, 100, 1000]))
+    axA.xaxis.set_minor_locator(mticker.NullLocator())
+    axA.set_xticklabels(["0.1", "1", "10", "100", "1,000"], fontsize=6.4)
     axA.grid(axis="x", which="major", color=GRID, linewidth=0.5)
     axA.set_axisbelow(True)
     # tier brackets
-    axA.text(0.14, 8.55, "exact / near-exact", fontsize=6.1, color=INK2, style="italic")
-    axA.text(15, 5.55, "dispatch rules", fontsize=6.1, color=INK2, style="italic")
-    axA.text(120, 1.35, "naive floor", fontsize=6.1, color=INK2, style="italic")
-    # GA beats cpsat60 annotation
+    # tier labels sit just above the top bar of their tier, which the order
+    # above fixes: exact/near-exact = rows 0-2, dispatching rules = rows 3-7,
+    # diagnostic floor = rows 8-9 (row index counted from the top). The wording
+    # is the caption's and the body's: "dispatching rules", "diagnostic floors".
+    _row = lambda m: ypos[order.index(m)]
+    axA.text(0.14, _row("cpsat300") + 0.55, "exact / near-exact", fontsize=6.1, color=INK, style="italic")
+    axA.text(15, _row("wmdd") + 0.55, "dispatching rules", fontsize=6.1, color=INK, style="italic")
+    # raised well clear of the random-ordering bar's own value label, and kept
+    # right of the EDD bar's end so the extra height costs no overlap
+    axA.text(135, _row("random") + 0.42, "diagnostic floor", fontsize=6.1,
+             color=INK, style="italic", va="bottom")
+    # GA beats cpsat60 annotation. The caption states the count; the figure
+    # only points at the bar the claim is about.
     # leader lands INSIDE the GA bar (not at its tip) so the curve stays well
     # clear of the '4.3' value label sitting just right of the bar end.
-    axA.annotate(f"GA beats CP-SAT 60s\non {ga_beats} hard instances",
+    axA.annotate("GA improves on CP-SAT 60 s here",
                  xy=(gaps["ga"]*0.55, ypos[order.index("ga")]),
-                 xytext=(9, 7.9), fontsize=6.1, color=INK, ha="left", va="center",
+                 xytext=(9, _row("cpsat60") + 0.9), fontsize=6.1, color=INK, ha="left", va="center",
                  arrowprops=dict(arrowstyle="-", color=MUTE, lw=0.6,
                                  connectionstyle="arc3,rad=-0.2"))
     axA.set_title(f"(a)  Solution quality on nonzero instances (n={int(nz.sum()):,})", loc="left",
@@ -252,33 +352,63 @@ def fig2_static():
     # drawn in EDD green and labelled 'EDD / pFIFO'. Panel (a) keeps both bars.
     order_b = [m for m in order if m != "pfifo"]
     LAB_B = dict(PRETTY); LAB_B["edd"] = "EDD / pFIFO"
-    OFF_B = {  # deterministic label offsets in POINTS: (dx, dy, ha, va)
-        "mor":      ( 7,  0, "left",   "center"),
-        "random":   ( 4,  6, "left",   "bottom"),
-        "edd":      (12, 11, "left",   "bottom"),  # up-right into clear gap (frontier line + WSPT box it in at dot level)
-        "wspt":     ( 7,  0, "left",   "center"),
-        "atc":      ( 7,  0, "left",   "center"),
-        "ga":       ( 7,  0, "left",   "center"),
-        "cpsat60":  ( 0,  8, "right",  "bottom"),  # up-left (right label overruns the panel edge)
-        "cpsat300": (-7,  0, "right",  "center"),
-    }
-    for m in order_b:
-        x, y = lat[m], gaps[m]
-        axB.scatter(x, y, s=42, color=mcol(m), edgecolor=SURF, linewidth=0.9, zorder=4)
-        dx, dy, ha, va = OFF_B[m]
-        axB.annotate(LAB_B.get(m, m), (x, y), textcoords="offset points", xytext=(dx, dy),
-                     fontsize=6.1, color=INK2, ha=ha, va=va)
     axB.set_xscale("log"); axB.set_yscale("log")
     axB.set_xlim(0.25, 12000); axB.set_ylim(0.1, 1200)
+    for m in order_b:
+        axB.scatter(lat[m], gaps[m], s=42, color=suite_color(m), edgecolor=SURF,
+                    linewidth=0.9, zorder=4)
+    # The six dispatching rules answer inside one factor of two in latency, so
+    # their labels cannot all sit at their own marker height: WMDD and ATC are
+    # 0.13 decades apart and would overprint. Each label therefore keeps its own
+    # x (just right of its dot) and takes the least-displaced height that leaves
+    # a readable gap to its neighbours, with a leader in the method's own colour
+    # tying it back to its dot. Labels themselves are black.
+    RULES_B = ["wmdd", "atc", "wspt", "edd", "random", "lpt"]
+    MINSEP = 0.30          # decades between label centres at this panel height
+    _rank = sorted(RULES_B, key=lambda m: gaps[m])
+    LADDER = dict(zip(_rank, (10 ** v for v in label_ladder(
+        [math.log10(gaps[m]) for m in _rank], MINSEP))))
+    # one shared column for the six labels: left edges align, and every leader
+    # is long enough to be seen, so no label can be read against a neighbour's dot
+    XCOL = max(lat[m] for m in RULES_B) * 1.65
+    for m in RULES_B:
+        axB.annotate(LAB_B.get(m, m), xy=(lat[m], gaps[m]),
+                     xytext=(XCOL, LADDER[m]), textcoords="data",
+                     fontsize=6.1, color=INK, ha="left", va="center", zorder=5,
+                     arrowprops=dict(arrowstyle="-", color=suite_color(m),
+                                     lw=0.8, shrinkA=1.0, shrinkB=3.5))
+    # the three search-based schedulers are far apart: plain adjacent labels
+    OFF_S = {"ga": (7, 0, "left", "center"),
+             "cpsat60": (7, 0, "left", "center"),
+             "cpsat300": (-7, 0, "right", "center")}
+    for m, (dx, dy, ha, va) in OFF_S.items():
+        axB.annotate(LAB_B.get(m, m), (lat[m], gaps[m]), textcoords="offset points",
+                     xytext=(dx, dy), fontsize=6.1, color=INK, ha=ha, va=va)
     axB.set_xlabel("Decision latency per instance  (ms, log)", fontsize=6.9)
     axB.set_ylabel("Mean gap to best-known TWT  (log)", fontsize=6.9)
+    # plain decimal tick labels here too, for the same print-size reason
+    axB.xaxis.set_major_locator(mticker.FixedLocator([1, 10, 100, 1000, 10000]))
+    axB.xaxis.set_minor_locator(mticker.NullLocator())
+    axB.set_xticklabels(["1", "10", "100", "1,000", "10,000"], fontsize=6.4)
+    axB.yaxis.set_major_locator(mticker.FixedLocator([0.1, 1, 10, 100, 1000]))
+    axB.yaxis.set_minor_locator(mticker.NullLocator())
+    axB.set_yticklabels(["0.1", "1", "10", "100", "1,000"], fontsize=6.4)
     axB.grid(True, which="major", color=GRID, linewidth=0.5)
     # guide regions
-    axB.text(0.7, 0.16, "fast, coarse", fontsize=6.1, color=MUTE, style="italic")
-    axB.text(1600, 300, "slow, exact", fontsize=6.1, color=MUTE, style="italic", ha="center")
-    axB.annotate("", xy=(3500, 0.3), xytext=(0.5, 300),
+    axB.text(0.7, 0.16, "fast, coarse", fontsize=6.1, color=INK, style="italic")
+    axB.text(1600, 300, "slow, exact", fontsize=6.1, color=INK, style="italic", ha="center")
+    # the trade-off guide starts to the right of the rule cluster, so it never
+    # crosses a direct label
+    _FR = ((2.5, 700.0), (3500.0, 0.3))
+    axB.annotate("", xy=_FR[1], xytext=_FR[0],
                  arrowprops=dict(arrowstyle="-", color=GRID, lw=0.8))
-    axB.text(35, 3.2, "quality / latency\nfrontier", fontsize=6.1, color=INK2, style="italic", ha="center", rotation=-33)
+    # rotate the guide's label by the line's angle ON THE PAGE, measured through
+    # the axes transform, so it stays parallel whatever the panel's aspect is
+    (_x0, _y0), (_x1, _y1) = (axB.transData.transform(p) for p in _FR)
+    axB.text(55, 8, "quality--latency\ntrade-off", fontsize=6.1, color=INK,
+             style="italic", ha="center", va="center",
+             rotation=math.degrees(math.atan2(_y1 - _y0, _x1 - _x0)),
+             rotation_mode="anchor")
     axB.set_title("(b)  Latency vs quality trade-off", loc="left",
                   fontsize=7.4, color=INK, weight="bold", pad=6)
     save(fig, "f2_static")
@@ -287,18 +417,18 @@ def fig2_static():
 # F3  intensity curves (4 small multiples)
 # ============================================================================
 def fig3_curves():
-    c = pd.read_csv(f"{ROOT}/results/p4_dyneval/e2_curve.csv")
+    c = read_results(f"{ROOT}/results/p4_dyneval/e2_curve.csv")
     # Policy = MEAN across the ten MLP seeds (protocol forbids best-of-seeds);
     # a min..max band across seeds shows honest seed spread (widens on campus 5 u>=1).
     POL_SEEDS = [f"v2rl{s}" for s in range(301, 311)]
-    series = [("edd","EDD"),("atc","ATC"),("wspt","WSPT"),("mor","MOR"),("policy","Policy (10 seeds)")]
+    series = [("edd","EDD"),("atc","ATC"),("wspt","WSPT"),("lpt","LPT"),("policy","Policy (10 seeds)")]
     # Per-series styles so tied lines that coincide exactly stay distinguishable:
     # thick EDD underneath, dashed ATC over it (gaps reveal green), Policy markers on top.
     STYLE = {
         "edd":    dict(ls="-",         lw=2.4, alpha=0.85, zorder=3, marker="",  ms=0),
         "atc":    dict(ls=(0,(4,1.8)), lw=1.5, alpha=1.0,  zorder=4, marker="",  ms=0),
         "wspt":   dict(ls="-",         lw=1.3, alpha=1.0,  zorder=3, marker="",  ms=0),
-        "mor":    dict(ls="-",         lw=1.3, alpha=1.0,  zorder=4, marker="",  ms=0),
+        "lpt":    dict(ls="-",         lw=1.3, alpha=1.0,  zorder=4, marker="",  ms=0),
         "policy": dict(ls="-",         lw=1.2, alpha=1.0,  zorder=5, marker="o", ms=3.2),
     }
     campuses = [5.0, 9.0, 10.0, 12.0]
@@ -344,8 +474,8 @@ def fig3_curves():
         ax.tick_params(labelleft=False)
     # overload label: top of the shaded band on campus 5, where no curve passes
     axes[0].text(1.17, 1.5e5, "overload\n$u>1$", fontsize=6.1, color=MUTE, ha="center", va="top")
-    # MOR callout on campus 12: clear space above-left of the red curve, not touching it
-    axes[3].text(0.68, 2.2e5, "MOR collapses", fontsize=6.1, color=CMAP["mor"],
+    # LPT callout on campus 12: clear space above-left of the red curve, not touching it
+    axes[3].text(0.68, 2.2e5, "LPT collapses", fontsize=6.1, color=CMAP["lpt"],
                  ha="left", va="top", weight="bold")
     # top-tier tie callout: text in empty upper-left of campus 9, leader to the tied bundle
     axes[1].annotate("top-tier tie:\nEDD $\\approx$ ATC $\\approx$ Policy",
@@ -361,7 +491,7 @@ def fig3_curves():
         Line2D([0],[0], color=mcol("edd"),    lw=2.4, ls="-",         label="EDD"),
         Line2D([0],[0], color=mcol("atc"),    lw=1.5, ls=(0,(4,1.8)), label="ATC"),
         Line2D([0],[0], color=mcol("wspt"),   lw=1.3, ls="-",         label="WSPT"),
-        Line2D([0],[0], color=mcol("mor"),    lw=1.3, ls="-",         label="MOR"),
+        Line2D([0],[0], color=mcol("lpt"),    lw=1.3, ls="-",         label="LPT"),
         Line2D([0],[0], color=mcol("policy"), lw=1.2, ls="-", marker="o", markersize=3.6,
                markeredgecolor=SURF, label="Policy (10 seeds)"),
     ]
@@ -451,7 +581,7 @@ def _draw_cell(ax, x, y, w, h, winners, best, held=False, dagger=False):
                 color=tc if lab else INK, weight="bold", zorder=6)
 
 def fig4_map():
-    d = pd.read_csv(f"{ROOT}/results/p4_dyneval/results.csv")
+    d = read_results(f"{ROOT}/results/p4_dyneval/results.csv")
     fig = plt.figure(figsize=figsize(180, 80))
     axA = fig.add_axes([0.030, 0.02, 0.26, 0.95]); axA.set_xlim(-1.15, 3.05); axA.set_ylim(-0.95, 3.55); axA.axis("off"); axA.set_aspect("equal"); axA.set_anchor("NW")
     axB = fig.add_axes([0.335, 0.02, 0.29, 0.95]); axB.set_xlim(-1.35, 3.05); axB.set_ylim(-1.05, 6.55); axB.axis("off"); axB.set_aspect("equal"); axB.set_anchor("W")
@@ -515,10 +645,10 @@ def fig4_map():
         axB.text(-0.12, yy + 0.5, f"c{camp}", ha="right", va="center", fontsize=6.6,
                  color=INK, weight="bold" if held else "normal")
     # held-out bracket
-    axB.plot([-0.78, -0.78], [4.05, 5.95], color=CMAP["mor"], lw=1.0)
-    axB.plot([-0.78, -0.68], [5.95, 5.95], color=CMAP["mor"], lw=1.0)
-    axB.plot([-0.78, -0.68], [4.05, 4.05], color=CMAP["mor"], lw=1.0)
-    axB.text(-0.95, 5.0, "held out", ha="center", va="center", rotation=90, fontsize=6.0, color=CMAP["mor"], weight="bold")
+    axB.plot([-0.78, -0.78], [4.05, 5.95], color=CMAP["lpt"], lw=1.0)
+    axB.plot([-0.78, -0.68], [5.95, 5.95], color=CMAP["lpt"], lw=1.0)
+    axB.plot([-0.78, -0.68], [4.05, 4.05], color=CMAP["lpt"], lw=1.0)
+    axB.text(-0.95, 5.0, "held out", ha="center", va="center", rotation=90, fontsize=6.0, color=CMAP["lpt"], weight="bold")
     for ci, (_, _, lab) in enumerate(colspec):
         axB.text(ci + 0.5, -0.12, lab, ha="center", va="top", fontsize=6.2, color=INK2)
     axB.text(1.5, -0.92, "crew multiplier  (regime)", ha="center", va="top", fontsize=6.9, color=INK)
@@ -566,63 +696,191 @@ def fig4_map():
     print("   F4 winner tally  AFTER  (4-way full-cell, seed-mean) :", tally, "| dagger cells:", n_dagger)
 
 # ============================================================================
-# F5  transfer (single column)
+# F5  transfer and stress (single column, two panels sharing the method rows)
+#   Source: results/r4_final/analysis/equivalence.csv, the definitive
+#   final-evaluation analysis.  Panel (a) is the held-out transfer campus,
+#   panel (b) the held-out chronic-overload campus; both score every method
+#   against that campus's own best method, so the pair answers "does the
+#   leading set survive a campus that was never trained on?".
 # ============================================================================
-def fig5_transfer():
-    d = pd.read_csv(f"{ROOT}/results/p4_dyneval/results.csv")
-    rules = ["edd","wspt","atc","pfifo","mor"]; pol = [f"v2rl{s}" for s in range(301, 311)]
-    camps = [1,2,5,9,10,12]
-    def ratios(reg, crew):
-        dd = d[d.regime==reg]
-        if crew is not None: dd = dd[dd.crew_multiplier==crew]
-        out = {}
-        for camp in camps:
-            cc = dd[dd.campus==camp]
-            if not len(cc): continue
-            mw = cc.groupby("method")["wwt"].mean()
-            br = mw.reindex(rules).min()
-            rr = [mw.get(p, np.nan)/br for p in pol]
-            out[camp] = (np.nanmean(rr), np.nanmin(rr), np.nanmax(rr))
-        return out
-    dft = ratios("replay-default", None)
-    tgt = ratios("replay-tight", 0.8)
+ANA_FINAL = f"{ROOT}/results/r4_final/analysis"
 
-    fig, ax = plt.subplots(figsize=figsize(88, 66)); style_ax(ax)
-    x = np.arange(len(camps)); w = 0.38
-    cA, cB = CMAP["policy"], "#9cc0ef"   # two shades of the policy hue
-    base = 1.0
-    for i,(dct,off,col,lab) in enumerate([(dft,-w/2,cA,"replay-default"),(tgt,+w/2,cB,"replay-tight m0.8")]):
-        for j,camp in enumerate(camps):
-            if camp not in dct: continue
-            mean,lo,hi = dct[camp]
-            ax.bar(x[j]+off, mean-base, width=w, bottom=base, color=col, edgecolor=SURF,
-                   linewidth=0.6, zorder=3, label=lab if j==0 else None)
-            # whiskers (3-seed min/max)
-            ax.plot([x[j]+off, x[j]+off], [lo, hi], color=INK2, lw=0.8, zorder=5)
-            ax.plot([x[j]+off-0.06, x[j]+off+0.06], [hi,hi], color=INK2, lw=0.8, zorder=5)
-            ax.plot([x[j]+off-0.06, x[j]+off+0.06], [lo,lo], color=INK2, lw=0.8, zorder=5)
-            if mean > 1.10:
-                # value label sits ABOVE the whisker cap (+0.12 pad); the c2 pair is at
-                # very different heights (2.2x vs 3.2x) so no x-separation is needed.
-                ax.text(x[j]+off, hi+0.12, f"{mean:.1f}x", ha="center", va="bottom",
-                        fontsize=6.2, color=INK, weight="bold")
-    ax.axhline(base, color=INK2, lw=0.9, zorder=4)
-    ax.text(5.52, base+0.02, "parity", ha="right", va="bottom", fontsize=6.0, color=INK2, style="italic")
-    ax.set_ylim(0.9, 4.9)
-    ax.set_yticks([1,2,3,4]); ax.set_yticklabels(["1x","2x","3x","4x"], fontsize=6.4)
-    ax.set_ylabel("Policy TWT / best-rule TWT", fontsize=7.0)
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"c{c}" for c in camps], fontsize=6.8, color=INK)
-    # held-out campuses read from the shaded span + italic header (redundant red
-    # 'held-out' tick labels removed to declutter the axis).
-    ax.axvspan(-0.5, 1.5, color=GRID, alpha=0.45, zorder=0, linewidth=0)
-    ax.text(0.5, 4.8, "held out from training", ha="center", va="top", fontsize=6.1, color=INK2, style="italic")
-    ax.text(3.75, 4.8, "training campuses  (parity holds)", ha="center", va="top", fontsize=6.1, color=INK2, style="italic")
-    ax.grid(axis="y", which="major", color=GRID, linewidth=0.5)
-    ax.set_xlim(-0.6, 5.6)
-    ax.legend(loc="center right", fontsize=6.4, bbox_to_anchor=(1.0, 0.56))
-    ax.set_title("Transfer to held-out campuses", loc="left", fontsize=7.6, color=INK, weight="bold", pad=5)
-    save(fig, "f5_transfer")
+F5_RULES = [("edd", "EDD"), ("pfifo", "pFIFO"), ("wmdd", "WMDD"), ("atc", "ATC"),
+            ("wspt", "WSPT"), ("lpt", "LPT"), ("random", "Random")]
+# learned pools, matched by the checkpoint-id prefix so no seed is typed in
+F5_POOLS = [(r"^v2rl\d+$", "Policy pool"),
+            (r"^v2at\d+$", "Attention pool"),
+            (r"^rl\d+$", "Curriculum-v1 pool")]
+F5_SCOPES = [("transfer", "campus=1|m=1.0", "Campus 1  ·  transfer"),
+             ("stress", "campus=2|m=1.0", "Campus 2  ·  chronic overload")]
+# Pastel amber, with the medium amber for its edge: the margin is a protocol
+# threshold and not a method, so it takes a hue no method in this figure uses
+# (a pastel blue would read as the learned pools' own colour).
+BAND, BAND_EDGE = "#f7efdb", "#b8862b"
+# On the overload campus the two diagnostic floors run to two hundred per cent
+# while the six other rules sit inside twenty, so that panel's x axis is broken:
+# 0 to F5_BREAK is expanded across F5_LEFTF of the panel and the rest is
+# compressed into what is left. Tick labels carry the true values throughout.
+F5_BREAK = {1: 20.0}
+F5_LEFTF, F5_GAPF = 0.60, 0.045
+
+
+def fig5_transfer():
+    import re
+    eq = pd.read_csv(f"{ANA_FINAL}/equivalence.csv")
+
+    def rows_for(scope_type, scope):
+        d = eq[(eq.scope_type == scope_type) & (eq.scope == scope)]
+        assert not d.empty, (scope_type, scope)
+        base = float(d.mean_best.iloc[0])
+        pct = lambda v: 100.0 * float(v) / base
+        gap = dict(zip(d.method, d.pct_from_best))
+        lo_ = dict(zip(d.method, d.ci_lo))
+        hi_ = dict(zip(d.method, d.ci_hi))
+        inset = {m: bool(v) for m, v in zip(d.method, d.in_equivalence_set)}
+        out = []
+        for m, lab in F5_RULES:
+            out.append(dict(kind="rule", label=lab, key=m, mid=gap[m],
+                            lo=pct(lo_[m]), hi=pct(hi_[m]), inset=inset[m],
+                            n=1, k=int(inset[m])))
+        for pat, lab in F5_POOLS:
+            seeds = [m for m in d.method if re.match(pat, m)]
+            g = np.array([gap[m] for m in seeds], dtype=float)
+            out.append(dict(kind="pool", label=lab, key="policy",
+                            mid=float(np.median(g)), lo=g.min(), hi=g.max(),
+                            inset=None, n=len(seeds),
+                            k=sum(inset[m] for m in seeds)))
+        return (out, pct(d.margin.iloc[0]), int(d.n_configs.iloc[0]),
+                int(len(d)), int(d.in_equivalence_set.sum()))
+
+    panels = [rows_for(st, sc) + (title,) for st, sc, title in F5_SCOPES]
+    nrow = len(panels[0][0])
+
+    # cas-sc places every figure at width=\\linewidth = 468.33 pt = 165.1 mm, so
+    # the canvas is built at that width and the printed text size is the source
+    # size; a narrower canvas would be enlarged and print oversized.
+    fig = plt.figure(figsize=figsize(165.1, 74))
+    left, bot, height = 0.163, 0.250, 0.620
+    width, gapw = 0.393, 0.043
+    for i, (rows, margin_pct, n_cfg, n_meth, n_set, title) in enumerate(panels):
+        ax = fig.add_axes([left + i * (width + gapw), bot, width, height])
+        style_ax(ax)
+        ypos = np.arange(nrow)[::-1]
+        # every number is printed to the right of its row, so the axis is
+        # widened until the longest label fits rather than flipping labels to
+        # the left, where they would collide with the method names
+        # one decimal for every value label in a panel, so the column reads as
+        # one column rather than as three formats
+        def _txt(r):
+            return f"{r['mid']:.1f}" + (
+                f"  {r['k']}/{r['n']}" if r["kind"] == "pool" and r["n"] > 1
+                else "")
+        dmax = max(max(r["hi"], r["mid"]) for r in rows)
+        brk = F5_BREAK.get(i)
+        if brk is None:
+            xdata = max(1.06 * dmax, 1.35 * margin_pct)
+
+            def T(v, _x=xdata):
+                return float(v) / _x
+        else:
+            xdata = 1.04 * dmax
+
+            def T(v, _b=brk, _x=xdata):
+                v = float(v)
+                if v <= _b:
+                    return F5_LEFTF * v / _b
+                return (F5_LEFTF + F5_GAPF
+                        + (1.0 - F5_LEFTF - F5_GAPF) * (v - _b) / (_x - _b))
+        # room for the value labels, measured from the labels themselves; a
+        # label that would land inside the break gap is pushed past it
+        def _tx(r):
+            x = T(max(r["hi"], r["mid"])) + 0.022
+            if brk is not None and F5_LEFTF - 0.004 < x < F5_LEFTF + F5_GAPF:
+                x = F5_LEFTF + F5_GAPF + 0.008
+            return x
+        charw = 3.1 / (width * 165.1 / 25.4 * 72.0)     # one digit at 6.2 pt
+        xhi = max(_tx(r) + charw * len(_txt(r)) for r in rows) + 0.012
+        # the margin band: a rule is in the set when its whole interval is inside
+        ax.axvspan(0, T(margin_pct), color=BAND, zorder=0, linewidth=0)
+        ax.axvline(T(margin_pct), color=BAND_EDGE, lw=0.7, zorder=1)
+        for y, r in zip(ypos, rows):
+            col = suite_color(r["key"]) if r["kind"] == "rule" else CMAP["policy"]
+            span = r["hi"] - r["lo"]
+            if span > 1e-9:
+                lw = 1.0 if r["kind"] == "rule" else 1.9
+                ax.plot([T(r["lo"]), T(r["hi"])], [y, y], color=col, lw=lw,
+                        alpha=1.0 if r["kind"] == "rule" else 0.45,
+                        solid_capstyle="butt", zorder=4)
+                if r["kind"] == "rule":
+                    for xv in (r["lo"], r["hi"]):
+                        ax.plot([T(xv), T(xv)], [y - 0.18, y + 0.18], color=col,
+                                lw=1.0, zorder=4)
+            filled = r["inset"] if r["kind"] == "rule" else (r["k"] == r["n"])
+            ax.plot(T(r["mid"]), y, marker="o" if r["kind"] == "rule" else "D",
+                    markersize=4.0 if r["kind"] == "rule" else 3.4, zorder=6,
+                    color=col if filled else SURF, markeredgecolor=col,
+                    markeredgewidth=0.9, linestyle="none")
+            ax.text(_tx(r), y, _txt(r), ha="left", va="center", fontsize=6.2,
+                    color=INK, zorder=8)
+        ax.set_ylim(-0.7, nrow - 0.3)
+        ax.set_xlim(-0.03, xhi)
+        ax.set_yticks(ypos)
+        if i == 0:
+            ax.set_yticklabels([r["label"] for r in rows], fontsize=7.0, color=INK)
+        else:
+            ax.tick_params(labelleft=False)
+        # ticks carry the true percentages on both sides of a break
+        if brk is None:
+            tv = [t for t in mticker.MaxNLocator(3, steps=[1, 2, 2.5, 5, 10])
+                  .tick_values(0, xdata) if 0 <= t <= xdata]
+        else:
+            tv = ([t for t in (0, 5, 10, 15, 20) if t <= brk]
+                  + [t for t in (50, 100, 150, 200, 250) if brk < t <= xdata])
+        ax.set_xticks([T(t) for t in tv])
+        ax.set_xticklabels([f"{t:g}" for t in tv])
+        ax.tick_params(axis="x", labelsize=6.4)
+        ax.grid(axis="x", which="major", color=GRID, linewidth=0.4)
+        if brk is not None:
+            # interrupt every mark that crosses the break, then mark the break
+            # itself with the usual pair of slashes on the baseline
+            ax.add_patch(Rectangle((F5_LEFTF, -0.7), F5_GAPF, nrow + 0.4,
+                                   facecolor=SURF, edgecolor="none", zorder=7))
+            for xb in (F5_LEFTF, F5_LEFTF + F5_GAPF):
+                ax.plot([xb - 0.013, xb + 0.013], [-0.90, -0.50], color=MUTE,
+                        lw=0.8, zorder=8, clip_on=False,
+                        transform=ax.transData)
+        ax.set_xlabel("Percent above the campus's own best method"
+                      + ("\n(axis break at %g%%)" % brk if brk else ""),
+                      fontsize=7.0, labelpad=3)
+        ax.text(0.5, 1.085, title, transform=ax.transAxes, ha="center",
+                va="bottom", fontsize=7.4, color=INK)
+        ax.text(0.5, 1.018, f"n {n_cfg}", transform=ax.transAxes, ha="center",
+                va="bottom", fontsize=6.4, color=INK, style="italic")
+
+    handles = [
+        Patch(facecolor=BAND, edgecolor=BAND_EDGE, linewidth=0.7,
+              label="practical-equivalence margin"),
+        Line2D([0], [0], marker="o", color=INK2, lw=1.0, markerfacecolor=INK2,
+               markersize=4.0, label="rule: 95% interval, in the set"),
+        Line2D([0], [0], marker="o", color=INK2, lw=1.0, markerfacecolor=SURF,
+               markeredgecolor=INK2, markeredgewidth=0.9, markersize=4.0,
+               label="rule: 95% interval, outside it"),
+        Line2D([0], [0], marker="D", color=CMAP["policy"], lw=1.9, alpha=0.6,
+               markerfacecolor=SURF, markeredgecolor=CMAP["policy"],
+               markersize=3.4, label="pool: seed range, median, seeds in set"),
+    ]
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.56, 0.006),
+               ncol=4, fontsize=6.4, frameon=False, handlelength=1.7,
+               columnspacing=1.2, labelspacing=0.40)
+    save(fig, "f5_transfer", tight=False)
+
+    for (rows, margin_pct, n_cfg, n_meth, n_set, title) in panels:
+        print(f"   F5 {title}: set {n_set}/{n_meth}, n {n_cfg}, "
+              f"margin {margin_pct:.2f}% of the best mean")
+        print("      " + "  ".join(
+            f"{r['label']}={r['mid']:.2f}[{r['lo']:.2f},{r['hi']:.2f}]"
+            + ("" if r["kind"] == "rule" else f" {r['k']}/{r['n']}")
+            for r in rows))
 
 # ============================================================================
 # F6  sensitivity (Kendall tau matrix, single column) -- frozen summary values
@@ -688,11 +946,19 @@ def fig6_sensitivity():
     save(fig, "f6_sensitivity", tight=False)
 
 # ============================================================================
-MAIN = {"f1":fig1_pipeline, "f2":fig2_static, "f3":fig3_curves,
-        "f4":fig4_map, "f5":fig5_transfer, "f6":fig6_sensitivity}
+MAIN = {"f1": fig1_pipeline, "f2": fig2_static, "f5": fig5_transfer}
+# The revision moved three figures to scripts/r4_figures.py, which reads the
+# definitive final-evaluation analysis instead of the development sweep. Two of
+# them write the SAME file names as the functions kept below for reference, so
+# running those here would silently overwrite the manuscript's versions.
+SUPERSEDED = {"f3": "f3_curves", "f4": "f4_map", "f6": "f6_robustness"}
 if __name__ == "__main__":
     set_style()
     which = sys.argv[1:] or list(MAIN)
     for k in which:
+        if k in SUPERSEDED:
+            raise SystemExit(
+                f"{k} is now built by scripts/r4_figures.py "
+                f"(writes {SUPERSEDED[k]}.pdf); run that script instead.")
         print(f"[{k}]"); MAIN[k]()
     print("done.")

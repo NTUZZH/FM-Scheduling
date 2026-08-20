@@ -59,15 +59,25 @@ def overlaps_any(intervals: list[tuple[float, float]], lo: float, hi: float) -> 
 
 
 def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--corpus", choices=["v10", "v11"], default="v11",
+                    help="corpus definition: v11 (default; stable R7 tie rule"
+                         " + priority mapping fitted on training years only,"
+                         " protocol R4.2) or v10 (the first release's exact"
+                         " behaviour).")
+    args = ap.parse_args()
+    v11 = args.corpus == "v11"
     t_start = time.time()
-    print("loading + cleaning FMUCD ...", flush=True)
+    print("loading + cleaning FMUCD (corpus %s) ..." % args.corpus, flush=True)
     raw = io.load_raw(RAW)
-    clean, audit = io.clean(raw)
+    clean, audit = io.clean(raw, dominant_sort="stable" if v11 else "legacy")
     del raw
     print(f"  clean rows: {len(clean):,} ({time.time() - t_start:.0f}s)", flush=True)
 
     # ---- calibration ------------------------------------------------------- #
-    mapping, capacity, tmap, trade_m = calib.write_calibration(clean, CALIB_OUT)
+    mapping, capacity, tmap, trade_m = calib.write_calibration(
+        clean, CALIB_OUT, fit_end=calib.TRAIN_END if v11 else None)
     priority = calib.priority_class_series(clean, mapping)
     print(f"calibration written to {CALIB_OUT}", flush=True)
 

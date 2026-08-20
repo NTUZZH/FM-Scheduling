@@ -25,6 +25,21 @@ The dispatcher never inserts idle time on purpose -- that is the defining
 limitation of dispatching versus the CP-SAT solver, and it is *why* a solver can
 beat every PDR (see tests/fixtures/tiny_instance.md).
 
+Rules
+-----
+  ``edd``      earliest due date;
+  ``wspt``     weighted shortest processing time;
+  ``atc``      apparent tardiness cost, look-ahead k = 2 (literature default);
+  ``atc_k05``, ``atc_k1``, ``atc_k3``, ``atc_k5``, ``atc_k10``
+               the same rule at k in {0.5, 1, 3, 5, 10} (the R4.3 tuning grid);
+  ``atc_la``   forecast-aware ATC: the R4.6 look-ahead baseline, runnable ONLY
+               through ``fmwos.env.DispatchEnv`` because it reads the trade's
+               known-but-unreleased orders;
+  ``pfifo``    priority class first, FIFO within a class;
+  ``wmdd``     weighted modified due date (Kanet and Li 2004);
+  ``lpt``      longest processing time within the trade queue (diagnostic);
+  ``random``   uniformly random pick (seeded floor).
+
 Every choice is deterministic for a fixed ``seed`` (the seed only matters for the
 'random' rule).  Complexity: O(E log E) for the event heap plus O(sum |queue|)
 for the linear per-dispatch scans; for 400 jobs x dozens of technicians this is
@@ -37,6 +52,7 @@ work orders, since every job is picked exactly once).
 
 from __future__ import annotations
 
+import functools
 import heapq
 import itertools
 import math
@@ -83,21 +99,79 @@ def _pick_atc(queue, t, rng, k=2.0):
     return min(queue, key=key)
 
 
+# ATC at the look-ahead values of the R4.3 tuning grid.  These are module-level
+# ``functools.partial`` objects (not closures) so they pickle across worker forks
+# exactly like the plain rule functions.
+_pick_atc_k05 = functools.partial(_pick_atc, k=0.5)
+_pick_atc_k1 = functools.partial(_pick_atc, k=1.0)
+_pick_atc_k3 = functools.partial(_pick_atc, k=3.0)
+_pick_atc_k5 = functools.partial(_pick_atc, k=5.0)
+_pick_atc_k10 = functools.partial(_pick_atc, k=10.0)
+
+
+ATC_K = 2.0             # the frozen ATC look-ahead (literature default)
+_LA_WINDOW_BH = 40.0    # W: window over which known future work is counted
+
+
+def _pick_atc_la(queue, t, rng, view):
+    """Forecast-aware ATC (R4.6): ATC whose look-ahead shrinks as known work piles up.
+
+    ``view`` is supplied by ``fmwos.env.DispatchEnv.run_policy`` and holds the
+    trade's known-but-unreleased orders and its crew size.  With
+
+        rho_known = (sum p_bh of known orders releasing within W) / (W * crew)
+
+    the rule scores exactly as ATC but at ``k_eff = k / (1 + rho_known)``: a
+    smaller k narrows the slack discount horizon, so the rule gets greedier about
+    urgent work before the known wave lands.  When nothing is known (every
+    corrective-only queue, and every queue at L=0) rho_known is 0 and the rule is
+    ATC at k = 2, pick for pick.
+    """
+    crew = view["crew"] or 1
+    horizon = t + _LA_WINDOW_BH
+    load = sum(j["p_bh"] for j in view["known"]
+               if float(j["release_bh"]) <= horizon)
+    rho_known = load / (_LA_WINDOW_BH * crew)
+    return _pick_atc(queue, t, rng, k=ATC_K / (1.0 + rho_known))
+
+
+# Marks the rule as env-only: DispatchEnv.run_policy passes the visibility view,
+# and pdrs.dispatch (which has no known-order state) refuses it.
+_pick_atc_la.wants_visibility = True
+
+
 def _pick_pfifo(queue, t, rng):
     """Priority-FIFO: lowest priority class first (1 before 4); FIFO (earliest
     release_bh) within a class (tie: job id)."""
     return min(queue, key=lambda j: (j["priority"], j["release_bh"], j["id"]))
 
 
-def _pick_mor(queue, t, rng):
-    """MOR-backlog, single-trade interpretation.
+def _pick_wmdd(queue, t, rng):
+    """Weighted Modified Due Date (Kanet & Li 2004, J. Sched. 7(4):261-276).
 
-    The classic 'Most Operations/Work Remaining' rule chooses *across* stages or
-    resources -- but in this benchmark every technician serves exactly one trade,
-    so there is no cross-trade choice to make (the spec calls this out).  We
-    therefore implement the intent -- shrink the trade's backlog fastest -- as
-    Longest Processing Time (LPT) *within* the technician's own queue: dispatch
-    the largest-p_bh job first (tie: job id).
+    At time ``t`` dispatch the job minimizing
+
+        (1 / w) * max(p, due - t)
+
+    (tie: job id).  A job with slack left is ranked by its weighted remaining
+    time to the due date; once the slack is gone the term collapses to p / w, so
+    the rule behaves like weighted EDD while the queue is early and like WSPT
+    once it is late.  It is the strong transparent baseline for sum w_j T_j.
+    """
+    return min(
+        queue,
+        key=lambda j: (max(j["p_bh"], j["due_bh"] - t) / j["weight"], j["id"]),
+    )
+
+
+def _pick_lpt(queue, t, rng):
+    """Longest Processing Time within the technician's trade queue.
+
+    Dispatch the largest-p_bh job first (tie: job id).  Every technician serves
+    exactly one trade, so this is a pure single-queue workload rule: it ignores
+    due dates and weights and is kept as a deliberately simple workload-oriented
+    diagnostic comparator, not as a competitive baseline.  (The released v1.0
+    result files label this rule "mor".)
     """
     return min(queue, key=lambda j: (-j["p_bh"], j["id"]))
 
@@ -110,9 +184,16 @@ def _pick_random(queue, t, rng):
 _RULES = {
     "edd": _pick_edd,
     "wspt": _pick_wspt,
-    "atc": _pick_atc,
+    "atc": _pick_atc,           # k = 2 (literature default)
+    "atc_k05": _pick_atc_k05,
+    "atc_k1": _pick_atc_k1,
+    "atc_k3": _pick_atc_k3,
+    "atc_k5": _pick_atc_k5,
+    "atc_k10": _pick_atc_k10,
+    "atc_la": _pick_atc_la,     # env-only (needs the visibility view)
     "pfifo": _pick_pfifo,
-    "mor": _pick_mor,
+    "wmdd": _pick_wmdd,
+    "lpt": _pick_lpt,
     "random": _pick_random,
 }
 
@@ -144,7 +225,8 @@ def dispatch(instance: dict, rule: str, seed: int = 0) -> dict:
     Parameters
     ----------
     instance : dict   an instance dict per the interface spec
-    rule     : str    one of edd|wspt|atc|pfifo|mor|random
+    rule     : str    any key of ``_RULES`` (see the module docstring) EXCEPT
+                      the env-only ``atc_la``, which raises ValueError here
     seed     : int    RNG seed (only affects the 'random' rule)
 
     Returns
@@ -153,6 +235,13 @@ def dispatch(instance: dict, rule: str, seed: int = 0) -> dict:
     """
     t_start = time.perf_counter()
     pick = get_rule(rule)
+    if getattr(pick, "wants_visibility", False):
+        raise ValueError(
+            "rule {!r} needs the visibility view (the trade's known but "
+            "unreleased orders), which this dispatcher does not track; run it "
+            "through fmwos.env.DispatchEnv(instance, visibility_L=L)."
+            "run_policy(pdrs.get_rule({!r}))".format(rule, rule)
+        )
     rng = random.Random(seed)
 
     technicians = instance["technicians"]

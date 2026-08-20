@@ -1,0 +1,6 @@
+check,protocol,n_rows,n_configs,n_anchors,n_methods,n_arms,n_infeasible,n_errors,elapsed_seconds,n_verdict,n_campus1,n_campus2
+evalb_anchors,R4.4,3859,227,227,17,1,0,0,,180,30,17
+pmodel,R4.7,11560,680,227,17,3,0,0,26.334,539,90,51
+capacity,R4.8,7718,454,227,17,2,0,0,17.564,360,60,34
+backdate,R4.9,3859,227,227,17,1,0,0,9.681,180,30,17
+sla,R4.10,11577,681,227,17,3,0,0,25.402,540,90,51

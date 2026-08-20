@@ -18,6 +18,14 @@ Asserts, on hand-built fixtures:
       exactly what a non-delay rule cannot do.  Asserts rollcp2 strictly beats
       EDD, the first start is inside the idle gap (> first release), and the
       heavy job precedes the light one (exercises the _WAKE path end-to-end).
+  (b3) VISIBILITY ADVANTAGE (R4.6): one technician, a long low-weight job
+      released at 0 and a short high-weight PREVENTIVE job released at 4 with a
+      tight due date.  At L=0 the planner can only see the long job and starts it
+      at once, so the preventive job finishes late; under full visibility the
+      preventive job is in the snapshot from bh 0 with its true shifted release,
+      the planner idles the technician until 4 and serves it first.  Asserts
+      TWT(full) < TWT(0), both schedules feasible, and that no start precedes its
+      job's release (the known job must be planned early, never STARTED early).
   (c) tech_available CORRECTNESS: a one-tech snapshot with the tech busy until
       a_u schedules its job to start at >= a_u (the dummy [0, a_u) interval
       works), whereas the same snapshot without tech_available starts at 0.
@@ -123,6 +131,29 @@ def idle_wait_fixture():
     }
 
 
+def visibility_fixture():
+    """Single tech; visibility of ONE preventive order is worth 150 weighted units.
+
+    A (p=6, w=1, due 100) is released at bh 0; B is preventive (p=2, w=100,
+    due 6.5) and released at bh 4.  Blind (L=0) the planner sees only A at bh 0,
+    starts it on [0, 6] and B can only run [6, 8] -- tardy 1.5 at weight 100, so
+    TWT = 150.  Under full visibility B is known from bh 0 with release 4, so the
+    optimum idles the tech until 4, runs B on [4, 6] (on time) and A on [6, 12]
+    (due 100), giving TWT = 0.
+    """
+    return {
+        "meta": {"id": "roll_visibility", "campus": 5, "track": "replay",
+                 "size_class": 50, "window_start": "synthetic",
+                 "window_bh": 20.0, "provenance": "R", "seed": None},
+        "trades": ["X"],
+        "technicians": [{"id": "T0", "trade": "X"}],
+        "work_orders": [
+            _wo("A_long", "X", 6.0, 0.0, 100.0, 1.0, 4),
+            _wo("B_pm", "X", 2.0, 4.0, 6.5, 100.0, 2, is_pm=True),
+        ],
+    }
+
+
 def wwt(instance, schedule):
     res = validate(instance, schedule)
     return res, res["metrics"]["WWT"]
@@ -217,6 +248,50 @@ def test_idle_wait(failures):
 
 
 # --------------------------------------------------------------------------- #
+# (b3) preventive visibility (R4.6)
+# --------------------------------------------------------------------------- #
+def test_visibility(failures):
+    print("(b3) VISIBILITY: full visibility of a preventive order beats L=0")
+    inst = visibility_fixture()
+    rel = {wo["id"]: wo["release_bh"] for wo in inst["work_orders"]}
+
+    blind = roll_cpsat(inst, budget_s=2.0, visibility_L=0.0)
+    bres, bw = wwt(inst, blind)
+    seer = roll_cpsat(inst, budget_s=2.0, visibility_L=None)   # None = full
+    sres, sw = wwt(inst, seer)
+
+    b_starts = {a["wo"]: a["start_bh"] for a in blind["assignments"]}
+    s_starts = {a["wo"]: a["start_bh"] for a in seer["assignments"]}
+    print("    L=0    TWT=%.3f (feasible=%s, replans=%d) starts=%s"
+          % (bw, bres["feasible"], blind["decisions"],
+             {k: round(v, 3) for k, v in b_starts.items()}))
+    print("    L=full TWT=%.3f (feasible=%s, replans=%d) starts=%s"
+          % (sw, sres["feasible"], seer["decisions"],
+             {k: round(v, 3) for k, v in s_starts.items()}))
+
+    for tag, res in (("L=0", bres), ("L=full", sres)):
+        if not res["feasible"]:
+            failures.append("(b3) %s schedule INFEASIBLE: %s"
+                            % (tag, "; ".join(res["violations"][:3])))
+    if sw >= bw - TOL:
+        failures.append("(b3) visibility bought nothing: TWT(full)=%.3f is not "
+                        "< TWT(0)=%.3f" % (sw, bw))
+    else:
+        print("    visibility advantage: %.3f -> %.3f" % (bw, sw))
+    # A known order is plannable but never startable early (validator check (c)
+    # covers this too; asserted here directly because it IS the protocol).
+    for tag, starts in (("L=0", b_starts), ("L=full", s_starts)):
+        for jid, st in starts.items():
+            if st < rel[jid] - TOL:
+                failures.append("(b3) %s: %s starts at %.3f, before its release "
+                                "%.3f" % (tag, jid, st, rel[jid]))
+    if len(s_starts) == 2 and s_starts.get("B_pm", 0.0) > s_starts.get("A_long", 0.0):
+        failures.append("(b3) L=full did not serve the preventive job first "
+                        "(B_pm at %.3f, A_long at %.3f)"
+                        % (s_starts["B_pm"], s_starts["A_long"]))
+
+
+# --------------------------------------------------------------------------- #
 # (c) tech_available correctness
 # --------------------------------------------------------------------------- #
 def test_tech_available(failures):
@@ -278,6 +353,8 @@ def main():
     test_beats_edd(failures)
     print()
     test_idle_wait(failures)
+    print()
+    test_visibility(failures)
     print()
     test_tech_available(failures)
     print()

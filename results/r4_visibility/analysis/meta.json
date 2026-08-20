@@ -1,0 +1,388 @@
+{
+  "script": "scripts/r4_vis_analysis.py",
+  "generated": "2026-08-19T21:17:11",
+  "elapsed_seconds": 63.850753,
+  "inputs": {
+    "results": "./results/r4_visibility/results.csv",
+    "meta": "./results/r4_visibility/meta.json"
+  },
+  "value_col": "wwt",
+  "n_boot": 10000,
+  "seed": 12345,
+  "alpha": 0.05,
+  "margin_abs": 1.0,
+  "margin_rel": 0.01,
+  "levels": [
+    "0",
+    "8",
+    "40",
+    "full"
+  ],
+  "control_level": "0",
+  "pairing_key": "config id with the _L<tag> suffix removed",
+  "cluster_key": "base_id (the base instance)",
+  "arms": {
+    "atc_la": {
+      "kind": "rule",
+      "label": "forecast-aware ATC",
+      "regimes": [
+        "vis-gen",
+        "vis-empirical"
+      ],
+      "note": "one artifact run at four levels: the contrast is the information alone"
+    },
+    "rollcp2": {
+      "kind": "optimizer",
+      "label": "rolling CP-SAT (2 s budget)",
+      "regimes": [
+        "vis-empirical"
+      ],
+      "note": "one artifact run at four levels, empirical cells only (R4 adjustment); the contrast is the information alone"
+    },
+    "vispool": {
+      "kind": "policy",
+      "label": "visibility policy pool (5 seeds)",
+      "regimes": [
+        "vis-gen",
+        "vis-empirical"
+      ],
+      "note": "five checkpoints trained AND run at the level: the contrast carries the retraining as well as the information"
+    },
+    "visseed501": {
+      "kind": "policy",
+      "label": "visibility policy seed 501",
+      "regimes": [
+        "vis-gen",
+        "vis-empirical"
+      ],
+      "note": "seed 501 at the level against seed 501 at level 0 (same widened architecture, same initialisation)"
+    },
+    "visseed502": {
+      "kind": "policy",
+      "label": "visibility policy seed 502",
+      "regimes": [
+        "vis-gen",
+        "vis-empirical"
+      ],
+      "note": "seed 502 at the level against seed 502 at level 0 (same widened architecture, same initialisation)"
+    },
+    "visseed503": {
+      "kind": "policy",
+      "label": "visibility policy seed 503",
+      "regimes": [
+        "vis-gen",
+        "vis-empirical"
+      ],
+      "note": "seed 503 at the level against seed 503 at level 0 (same widened architecture, same initialisation)"
+    },
+    "visseed504": {
+      "kind": "policy",
+      "label": "visibility policy seed 504",
+      "regimes": [
+        "vis-gen",
+        "vis-empirical"
+      ],
+      "note": "seed 504 at the level against seed 504 at level 0 (same widened architecture, same initialisation)"
+    },
+    "visseed505": {
+      "kind": "policy",
+      "label": "visibility policy seed 505",
+      "regimes": [
+        "vis-gen",
+        "vis-empirical"
+      ],
+      "note": "seed 505 at the level against seed 505 at level 0 (same widened architecture, same initialisation)"
+    }
+  },
+  "excluded_constant_by_construction": [
+    "edd",
+    "atc",
+    "wmdd"
+  ],
+  "rolling_budget_s": 2.0,
+  "saturation_fraction": 0.95,
+  "sanity_checks": [
+    {
+      "check": "rows vs meta.json",
+      "got": 50256,
+      "want": 50256,
+      "ok": true
+    },
+    {
+      "check": "configurations vs meta.json",
+      "got": 1080,
+      "want": 1080,
+      "ok": true
+    },
+    {
+      "check": "infeasible vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "errors vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "levels",
+      "got": 4,
+      "want": 4,
+      "ok": true
+    },
+    {
+      "check": "evaluated ids = configurations x levels",
+      "got": 4320,
+      "want": 4320,
+      "ok": true
+    },
+    {
+      "check": "vis-gen configurations vs meta.json",
+      "got": 540,
+      "want": 540,
+      "ok": true
+    },
+    {
+      "check": "vis-empirical configurations vs meta.json",
+      "got": 540,
+      "want": 540,
+      "ok": true
+    },
+    {
+      "check": "visibility arms missing (meta.json)",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "every (method, level) covers its designed configurations",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "methods scored",
+      "got": 35,
+      "want": 35,
+      "ok": true
+    },
+    {
+      "check": "rolling configurations vs meta.json",
+      "got": 144,
+      "want": 144,
+      "ok": true
+    },
+    {
+      "check": "rolling runs on the empirical cells only",
+      "got": [
+        "vis-empirical"
+      ],
+      "want": [
+        "vis-empirical"
+      ],
+      "ok": true
+    },
+    {
+      "check": "base_id equals the library's cluster derivation from id",
+      "got": true,
+      "want": true,
+      "ok": true
+    },
+    {
+      "check": "cluster derived from the pairing key equals base_id",
+      "got": true,
+      "want": true,
+      "ok": true
+    },
+    {
+      "check": "every configuration carries every level",
+      "got": 4,
+      "want": 4,
+      "ok": true
+    },
+    {
+      "check": "clusters",
+      "got": 720,
+      "want": 720,
+      "ok": true
+    },
+    {
+      "check": "constant-by-construction methods",
+      "got": [
+        "atc",
+        "edd",
+        "wmdd"
+      ],
+      "want": [
+        "atc",
+        "edd",
+        "wmdd"
+      ],
+      "ok": true
+    },
+    {
+      "check": "constant rules are identical at every level (max spread)",
+      "got": 0.0,
+      "want": 0.0,
+      "ok": true
+    },
+    {
+      "check": "no constant-by-construction row enters a paired L-effect",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "generator cells",
+      "got": 9,
+      "want": 9,
+      "ok": true
+    },
+    {
+      "check": "generator configurations per cell",
+      "got": [
+        60
+      ],
+      "want": [
+        60
+      ],
+      "ok": true
+    },
+    {
+      "check": "generator campuses",
+      "got": [
+        5,
+        9,
+        10,
+        12
+      ],
+      "want": [
+        5,
+        9,
+        10,
+        12
+      ],
+      "ok": true
+    },
+    {
+      "check": "empirical crew multipliers",
+      "got": [
+        0.6,
+        0.8,
+        1.0
+      ],
+      "want": [
+        0.6,
+        0.8,
+        1.0
+      ],
+      "ok": true
+    },
+    {
+      "check": "empirical base instances per crew multiplier",
+      "got": [
+        180
+      ],
+      "want": [
+        180
+      ],
+      "ok": true
+    },
+    {
+      "check": "empirical campuses",
+      "got": [
+        5,
+        9,
+        10,
+        12
+      ],
+      "want": [
+        5,
+        9,
+        10,
+        12
+      ],
+      "ok": true
+    },
+    {
+      "check": "no missing objective value",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "visibility seeds at L=0",
+      "got": [
+        501,
+        502,
+        503,
+        504,
+        505
+      ],
+      "want": [
+        501,
+        502,
+        503,
+        504,
+        505
+      ],
+      "ok": true
+    },
+    {
+      "check": "visibility seeds at L=8",
+      "got": [
+        501,
+        502,
+        503,
+        504,
+        505
+      ],
+      "want": [
+        501,
+        502,
+        503,
+        504,
+        505
+      ],
+      "ok": true
+    },
+    {
+      "check": "visibility seeds at L=40",
+      "got": [
+        501,
+        502,
+        503,
+        504,
+        505
+      ],
+      "want": [
+        501,
+        502,
+        503,
+        504,
+        505
+      ],
+      "ok": true
+    },
+    {
+      "check": "visibility seeds at L=full",
+      "got": [
+        501,
+        502,
+        503,
+        504,
+        505
+      ],
+      "want": [
+        501,
+        502,
+        503,
+        504,
+        505
+      ],
+      "ok": true
+    }
+  ]
+}

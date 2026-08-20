@@ -2,7 +2,7 @@
 """R2 / A3 -- travel-overhead re-simulation (E5 robustness check: charge
 0.25 bh per building switch for the dispatching policies).
 
-We re-simulate the SIX dispatching rules (edd, wspt, atc, pfifo, mor, random) on
+We re-simulate the SIX dispatching rules (edd, wspt, atc, pfifo, lpt, random) on
 the E5 sensitivity base set under an event simulator that charges an extra travel
 overhead whenever a technician STARTS an order whose building differs from the
 building of that technician's PREVIOUS order.
@@ -77,7 +77,7 @@ OUT_DIR = _ROOT / "results" / "r2_sens"
 CAMPUSES = [5, 9, 10, 12]
 SIZES = [150, 400]
 N_BASE = 30
-RULES = ["edd", "wspt", "atc", "pfifo", "mor", "random"]
+RULES = ["edd", "wspt", "atc", "pfifo", "lpt", "random"]
 OVERHEADS = [0.0, 0.25, 0.5]
 SEED = 301
 
@@ -334,7 +334,7 @@ def analyse(rows):
     L = []
     L.append("# A3 travel-overhead re-simulation summary")
     L.append("")
-    L.append("Source: `travel.csv`. Six PDRs (edd, wspt, atc, pfifo, mor, random) "
+    L.append("Source: `travel.csv`. Six PDRs (edd, wspt, atc, pfifo, lpt, random) "
              "on the E5 base set (campus {5,9,10,12} x size {150,400} x first-30 "
              "replay-test = 240 instances). A technician starting an order whose "
              "building differs from its previous order's building pays an extra "
@@ -412,7 +412,7 @@ def analyse(rows):
                                       if np.isfinite(infl_cov[0.5][m]) else -1))
     L.append("Travel inflates absolute TWT by a few percent on the covered "
              "campuses (pooled largest: %s +%.1f%% at 0.25 bh, %s +%.1f%% at "
-             "0.50 bh; per single campus the largest is MOR +6.9%% on campus 5 at "
+             "0.50 bh; per single campus the largest is LPT +6.9%% on campus 5 at "
              "0.25 bh) but leaves the ranking intact." % (
                  _mx25, infl_cov[0.25][_mx25], _mx50, infl_cov[0.5][_mx50]))
     L.append("")
@@ -445,11 +445,11 @@ def analyse(rows):
     (OUT_DIR / "tab_travel.tex").write_text("\n".join(T) + "\n")
     print("Wrote %s" % (OUT_DIR / "tab_travel.tex"))
 
-    print("\nMean-cell tau (no-travel vs travel), covered-campus MOR inflation:")
+    print("\nMean-cell tau (no-travel vs travel), covered-campus LPT inflation:")
     for ov in perturbed:
-        print("  overhead %.2f: mean-cell tau = %s ; covered inflation MOR=%+.1f%% "
+        print("  overhead %.2f: mean-cell tau = %s ; covered inflation LPT=%+.1f%% "
               "random=%+.1f%%" % (ov, _fmt(mean_cell[ov]),
-                                  infl_cov[ov]["mor"], infl_cov[ov]["random"]))
+                                  infl_cov[ov]["lpt"], infl_cov[ov]["random"]))
 
 
 if __name__ == "__main__":

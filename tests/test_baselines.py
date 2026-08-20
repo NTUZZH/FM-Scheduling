@@ -12,11 +12,17 @@ so the referee and the test cannot share a bug), and asserts:
   * CP-SAT proves OPTIMAL and its WWT equals the hand-derived optimum (32);
   * every PDR's WWT is >= CP-SAT's WWT.
 
+A separate single-queue check pins the pick of the two rules whose definition is
+easiest to get wrong: WMDD (Kanet & Li 2004) on a hand-built queue where its
+choice differs from both EDD's and WSPT's, and LPT on the same queue (longest
+p_bh wins).
+
 Prints a rule -> WWT table and finally 'ALL BASELINE TESTS PASSED'.
 """
 
 import json
 import os
+import random
 import sys
 
 # Make ``fmwos`` importable whether or not PYTHONPATH=src is set.
@@ -27,9 +33,24 @@ from fmwos import cpsat, pdrs  # noqa: E402
 
 FIXTURE = os.path.join(_ROOT, "tests", "fixtures", "tiny_instance.json")
 HAND_OPTIMUM = 32.0
-RULES = ["edd", "wspt", "atc", "pfifo", "mor", "random"]
+RULES = ["edd", "wspt", "atc", "atc_k05", "atc_k1", "atc_k3", "atc_k5",
+         "atc_k10", "pfifo", "wmdd", "lpt", "random"]
 SEED = 301
 TOL = 1e-6
+
+# Single-queue probe (all three jobs released, dispatched at t = 0). It is built
+# so the three rules disagree: EDD takes Q1 (due 1), WSPT takes Q2 (w/p = 3),
+# WMDD takes Q3 because (1/w) * max(p, due - t) is 10.0 / 16.67 / 2.5, and LPT
+# takes Q1 (p_bh 10).
+PROBE_QUEUE = [
+    {"id": "Q1", "trade": "D20", "p_bh": 10.0, "release_bh": 0.0,
+     "due_bh": 1.0, "priority": 4, "weight": 1.0, "is_pm": False},
+    {"id": "Q2", "trade": "D20", "p_bh": 1.0, "release_bh": 0.0,
+     "due_bh": 50.0, "priority": 4, "weight": 3.0, "is_pm": False},
+    {"id": "Q3", "trade": "D20", "p_bh": 4.0, "release_bh": 0.0,
+     "due_bh": 20.0, "priority": 2, "weight": 8.0, "is_pm": False},
+]
+PROBE_EXPECTED = {"edd": "Q1", "wspt": "Q2", "wmdd": "Q3", "lpt": "Q1"}
 
 
 # --------------------------------------------------------------------------- #
@@ -94,12 +115,34 @@ def wwt(instance, schedule):
     return total
 
 
+def check_picks():
+    """Return (failures, picks): each probe rule's pick on PROBE_QUEUE at t = 0."""
+    failures = []
+    picks = {}
+    rng = random.Random(SEED)
+    for rule, want in PROBE_EXPECTED.items():
+        got = pdrs.get_rule(rule)(list(PROBE_QUEUE), 0.0, rng)["id"]
+        picks[rule] = got
+        if got != want:
+            failures.append("[%s] picked %s on the probe queue, expected %s"
+                            % (rule, got, want))
+    # The probe is only informative while the four picks are not all the same.
+    if len({picks["edd"], picks["wspt"], picks["wmdd"]}) != 3:
+        failures.append("probe queue no longer separates EDD, WSPT and WMDD: %s"
+                        % picks)
+    return failures, picks
+
+
 def main():
     with open(FIXTURE) as f:
         instance = json.load(f)
 
     failures = []
     results = {}  # method -> WWT
+
+    # --- single-queue rule picks (WMDD vs EDD vs WSPT; LPT) -----------------
+    pick_failures, picks = check_picks()
+    failures.extend(pick_failures)
 
     # --- PDRs ---------------------------------------------------------------
     for rule in RULES:
@@ -131,6 +174,11 @@ def main():
                             % (rule, results[rule], cp_wwt))
 
     # --- report -------------------------------------------------------------
+    print("single-queue probe at t=0 (Q1 p=10 w=1 due=1; Q2 p=1 w=3 due=50; "
+          "Q3 p=4 w=8 due=20)")
+    for rule in PROBE_EXPECTED:
+        print("  %-6s picks %s" % (rule, picks[rule]))
+    print()
     print("fixture: %s  (hand-derived optimum WWT = %.1f)" % (instance["meta"]["id"], HAND_OPTIMUM))
     print("-" * 40)
     print("%-12s %10s" % ("method", "WWT"))

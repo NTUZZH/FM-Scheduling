@@ -13,6 +13,16 @@ Run:  PYTHONPATH=src python tests/test_env.py
     tight campus c02/150 first file, the admissible bound never exceeds the
     weighted tardiness of continuing EDD from that state with NO further
     arrivals (LB <= remaining WWT within 1e-6).
+(d) VISIBILITY PARITY (R4.6): on two replay instances carrying preventive
+    orders, EVERY myopic rule run through DispatchEnv(visibility_L=40) produces
+    the same schedule as at L=0 and as pdrs.dispatch -- rules pick from the
+    released queue only, so they are constant in L by construction.
+(e) VISIBILITY TELESCOPING: the reward identity of (b) still holds at L=40 with
+    lookahead_features=True (Phi ignores known-but-unreleased work), and the
+    observation's context vector is the widened F_CTX_LOOKAHEAD=13.
+(f) FORECAST-AWARE ATC: atc_la at L=0 equals atc pick for pick (rho_known is 0
+    with nothing known); at L=40 on an instance with known preventive work it may
+    differ, and whatever it produces is a feasible schedule per the validator.
 
 Prints a report and finally 'ALL ENV TESTS PASSED'.
 """
@@ -26,7 +36,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_ROOT, "src"))
 
 from fmwos import lb, pdrs, validator                       # noqa: E402
-from fmwos.env import DispatchEnv                            # noqa: E402
+from fmwos.env import DispatchEnv, F_CTX_LOOKAHEAD           # noqa: E402
 
 _INST = os.path.join(_ROOT, "data", "processed", "instances")
 
@@ -45,6 +55,10 @@ TELESCOPE_FILES = [
     ("c02", "150"),   # tight campus, large non-zero WWT under EDD
 ]
 LB_CAMPUS, LB_SIZE = "c02", "150"
+# R4.6 visibility checks: two campuses whose replay instances carry preventive
+# orders (the test asserts that, so it can never go vacuous).
+VIS_FILES = [("c05", "150"), ("c02", "150")]
+VIS_L = 40.0
 N_LB_STATES = 20
 TOL_PARITY = 1e-9
 TOL_TELE = 1e-6
@@ -210,6 +224,143 @@ def test_lb_admissibility(failures):
 
 
 # --------------------------------------------------------------------------- #
+# (d) visibility parity: every myopic rule is constant in L                   #
+# --------------------------------------------------------------------------- #
+def _myopic_rules():
+    """Rule names runnable without the visibility view (i.e. all but atc_la)."""
+    return [name for name, fn in sorted(pdrs._RULES.items())
+            if not getattr(fn, "wants_visibility", False)]
+
+
+def test_visibility_parity(failures):
+    print("(d) VISIBILITY PARITY: rule schedules are constant in L (L=40 vs L=0 vs pdrs)")
+    rules = _myopic_rules()
+    for campus, size in VIS_FILES:
+        inst = load(first_file(campus, size))
+        n_pm = sum(1 for wo in inst["work_orders"] if wo.get("is_pm"))
+        if n_pm == 0:
+            failures.append("VISIBILITY PARITY vacuous: %s has no PM orders"
+                            % inst["meta"]["id"])
+            continue
+        n_bad = 0
+        for rule in rules:
+            pick = pdrs.get_rule(rule)
+            ref = _by_wo(pdrs.dispatch(inst, rule, seed=301))
+            base = _by_wo(DispatchEnv(inst).run_policy(pick, method=rule, seed=301))
+            vis_env = DispatchEnv(inst, visibility_L=VIS_L)
+            vis_sched = vis_env.run_policy(pick, method=rule, seed=301)
+            vis = _by_wo(vis_sched)
+            same = (set(ref) == set(base) == set(vis)) and all(
+                ref[w][0] == base[w][0] == vis[w][0]
+                and abs(ref[w][1] - vis[w][1]) <= TOL_PARITY
+                and abs(base[w][1] - vis[w][1]) <= TOL_PARITY
+                and abs(ref[w][2] - vis[w][2]) <= TOL_PARITY
+                for w in ref)
+            feasible = validator.validate(inst, vis_sched)["feasible"]
+            if not (same and feasible):
+                n_bad += 1
+                failures.append("VISIBILITY PARITY FAIL %s %s (same=%s feasible=%s)"
+                                % (inst["meta"]["id"], rule, same, feasible))
+        print("    %-18s pm=%3d/%3d  rules=%d  identical at L=%.0f: %s"
+              % (inst["meta"]["id"], n_pm, len(inst["work_orders"]), len(rules),
+                 VIS_L, "yes" if n_bad == 0 else "NO (%d rules differ)" % n_bad))
+
+
+# --------------------------------------------------------------------------- #
+# (e) telescoping under visibility + lookahead features                       #
+# --------------------------------------------------------------------------- #
+def test_visibility_telescoping(failures):
+    print("(e) VISIBILITY TELESCOPING: L=40 + lookahead_features, sum(rewards)*100 "
+          "== -finalWWT")
+    for campus, size in VIS_FILES:
+        inst = load(first_file(campus, size))
+        env = DispatchEnv(inst, visibility_L=VIS_L, lookahead_features=True)
+        obs = env.reset()
+        if env.f_ctx != F_CTX_LOOKAHEAD or obs["ctx"].shape[0] != F_CTX_LOOKAHEAD:
+            failures.append("VIS CTX WIDTH %s: f_ctx=%d ctx=%d, expected %d"
+                            % (inst["meta"]["id"], env.f_ctx, obs["ctx"].shape[0],
+                               F_CTX_LOOKAHEAD))
+        if env.phi_prev != 0.0:
+            failures.append("VIS TELESCOPE FAIL %s Phi(s_0)=%r != 0"
+                            % (inst["meta"]["id"], env.phi_prev))
+        total_r, done = 0.0, False
+        # Track the lookahead columns so the check cannot pass on an all-zero
+        # (i.e. never-populated) known list.
+        seen_lookahead = False
+        while not done:
+            if float(obs["ctx"][10]) > 0.0 or float(obs["ctx"][11]) > 0.0:
+                seen_lookahead = True
+            cands = env._candidates
+            a = min(range(len(cands)),
+                    key=lambda i: (cands[i]["due_bh"], cands[i]["id"]))
+            obs, r, done, _info = env.step(a)
+            total_r += r
+        sched = env.to_schedule("edd")
+        wwt = validator.validate(inst, sched)["metrics"]["WWT"]
+        diff = abs(total_r * 100.0 - (-wwt))
+        print("    %-18s  sum*100=%12.6f  -finalWWT=%12.6f  |diff|=%.2e  "
+              "lookahead cols non-zero: %s"
+              % (inst["meta"]["id"], total_r * 100.0, -wwt, diff, seen_lookahead))
+        if diff > TOL_TELE:
+            failures.append("VIS TELESCOPE FAIL %s |diff|=%.3e > %.1e"
+                            % (inst["meta"]["id"], diff, TOL_TELE))
+        if not seen_lookahead:
+            failures.append("VIS TELESCOPE vacuous: %s never populated the "
+                            "lookahead columns" % inst["meta"]["id"])
+
+
+# --------------------------------------------------------------------------- #
+# (f) forecast-aware ATC                                                      #
+# --------------------------------------------------------------------------- #
+def test_atc_la(failures):
+    print("(f) FORECAST-AWARE ATC: atc_la == atc at L=0; feasible at L=40")
+    pick_la = pdrs.get_rule("atc_la")
+    pick_atc = pdrs.get_rule("atc")
+    if not getattr(pick_la, "wants_visibility", False):
+        failures.append("atc_la is missing the wants_visibility attribute")
+    try:
+        pdrs.dispatch(load(first_file(*VIS_FILES[0])), "atc_la")
+    except ValueError as e:
+        print("    pdrs.dispatch refuses atc_la: %s" % str(e).split(";")[0])
+    else:
+        failures.append("pdrs.dispatch(atc_la) should raise ValueError "
+                        "(it has no known-order state)")
+
+    for campus, size in VIS_FILES:
+        inst = load(first_file(campus, size))
+        ref = _by_wo(DispatchEnv(inst).run_policy(pick_atc, method="atc"))
+        la0 = _by_wo(DispatchEnv(inst, visibility_L=0.0)
+                     .run_policy(pick_la, method="atc_la"))
+        identical = (set(ref) == set(la0)) and all(
+            ref[w][0] == la0[w][0]
+            and abs(ref[w][1] - la0[w][1]) <= TOL_PARITY
+            and abs(ref[w][2] - la0[w][2]) <= TOL_PARITY
+            for w in ref)
+        if not identical:
+            failures.append("ATC_LA FAIL %s: atc_la at L=0 differs from atc"
+                            % inst["meta"]["id"])
+
+        vis_sched = DispatchEnv(inst, visibility_L=VIS_L).run_policy(
+            pick_la, method="atc_la")
+        res = validator.validate(inst, vis_sched)
+        la40 = _by_wo(vis_sched)
+        differs = any(la40[w][1] != la0[w][1] or la40[w][0] != la0[w][0]
+                      for w in la0)
+        print("    %-18s  atc_la(L=0)==atc: %s   L=%.0f feasible: %s  WWT=%.3f  "
+              "(differs from L=0: %s)"
+              % (inst["meta"]["id"], identical, VIS_L, res["feasible"],
+                 res["metrics"]["WWT"], differs))
+        if not res["feasible"]:
+            failures.append("ATC_LA FAIL %s: L=%.0f schedule INFEASIBLE: %s"
+                            % (inst["meta"]["id"], VIS_L,
+                               "; ".join(res["violations"][:3])))
+        if len(vis_sched["assignments"]) != len(inst["work_orders"]):
+            failures.append("ATC_LA FAIL %s: %d assignments for %d work orders"
+                            % (inst["meta"]["id"], len(vis_sched["assignments"]),
+                               len(inst["work_orders"])))
+
+
+# --------------------------------------------------------------------------- #
 def main():
     failures = []
     test_parity(failures)
@@ -217,6 +368,12 @@ def main():
     test_telescoping(failures)
     print()
     test_lb_admissibility(failures)
+    print()
+    test_visibility_parity(failures)
+    print()
+    test_visibility_telescoping(failures)
+    print()
+    test_atc_la(failures)
     print()
     if failures:
         print("FAILURES:")

@@ -28,7 +28,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from fmwos import generator, io          # noqa: E402
+from fmwos import calib, generator, io   # noqa: E402
 
 RAW = ROOT / "data" / "raw" / "FMUCD.csv"
 PARAMS_OUT = ROOT / "results" / "p2_generator"
@@ -171,8 +171,16 @@ def realism_row(campus, size, g, r):
 def main() -> None:
     t0 = time.time()
     print("loading + cleaning FMUCD ...", flush=True)
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--corpus", choices=["v10", "v11"], default="v11",
+                    help="corpus definition (see scripts/p1_instances.py);"
+                         " v11 fits the packs on the stable-tie-rule clean"
+                         " frame (the mapping's fit window is handled inside"
+                         " generator.fit_params via calib defaults).")
+    args = ap.parse_args()
     raw = io.load_raw(RAW)
-    clean, _ = io.clean(raw)
+    clean, _ = io.clean(raw, dominant_sort="stable" if args.corpus == "v11" else "legacy")
     del raw
     print(f"  clean rows: {len(clean):,} ({time.time() - t0:.0f}s)", flush=True)
 
@@ -181,7 +189,9 @@ def main() -> None:
     # ---- fit + write parameter packs -------------------------------------- #
     packs: dict[int, dict] = {}
     for campus in CAMPUSES:
-        params = generator.fit_params(clean, campus)
+        params = generator.fit_params(
+            clean, campus,
+            mapping_fit_end=calib.TRAIN_END if args.corpus == "v11" else None)
         packs[campus] = params
         with open(PARAMS_OUT / f"params_c{campus}.json", "w") as f:
             json.dump(params, f, indent=2, sort_keys=True)

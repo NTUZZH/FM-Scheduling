@@ -1,22 +1,29 @@
 #!/usr/bin/env python
 """P5 EXTRA - four added figures for the manuscript.
 
-f7_data      FMUCD at a glance          (double col, 4 panels)
-f8_priority  raw priority is not naive  (single col, 2 panels)
+f7_data      FMUCD at a glance          (full text width, 4 panels)
+f8_priority  raw priority is not naive  (full text width, 2 panels)
 f9_training  what training discriminates (single col, 2 panels)
-f10_rolling  replan on a clock          (double col, 2 panels)
+f10_rolling  replan on a clock          (full text width, 2 panels)
 
 Style is inherited verbatim from scripts/p5_figures.py (Times-serif, hairline
-axes, direct labels).  Every plotted value comes from a results/ file:
+axes, direct labels); as in scripts/r4_figures.py every text element is black
+and colour is carried to its label by a short leader rather than by coloured
+type.  Every plotted value comes from a results/ file or from the cleaned
+corpus itself:
   f7 : results/p0_profile/{arrivals,per_campus,trades}.csv + labor_hist.csv
-  f8 : results/p1_calib/priority_mapping.csv
+  f8 : the full-corpus priority profile recomputed here from the cleaned v1.1
+       corpus (see full_corpus_priority_profile), cross-checked against the
+       train-window mapping in results/p1_calib/priority_mapping.csv
   f9 : results/p3_train/v2/seed{301,302,303}/curves.csv
   f10: results/p4_dyneval/rolling_diag.json
 
   python scripts/p5_figures_extra.py [f7 f8 f9 f10]
 """
 import json
+import re
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -28,22 +35,33 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle, Patch
 import matplotlib.ticker as mticker
 
-sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from p5_figures import (  # noqa: E402
-    set_style, save, style_ax, figsize, CMAP, PRETTY,
+    set_style, save, style_ax, figsize, label_ladder, CMAP, PRETTY,
     INK, INK2, MUTE, GRID, AXIS, SURF, fmt_wwt, mcol,
 )
 
-ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[1])
+ROOT = str(Path(__file__).resolve().parents[1])
+sys.path.insert(0, f"{ROOT}/src")
 P0 = f"{ROOT}/results/p0_profile"
 
-# Okabe-Ito qualitative palette (colour-blind safe) for the 6 campuses -- kept
-# deliberately DISJOINT from the frozen method palette in p5_figures.
-CAMP_COL = {1: "#E69F00", 2: "#56B4E9", 5: "#009E73",
-            9: "#0072B2", 10: "#D55E00", 12: "#CC79A7"}
+# cas-sc \textwidth = 468.3324pt = 164.5 mm (paper/main.log). Every figure that
+# LaTeX includes at width=\linewidth is DESIGNED at that width, so 7.2 pt in the
+# script is 7.2 pt on the page.
+TEXTWIDTH_MM = 164.5
+
 SCHEDULABLE = [1, 2, 5, 9, 10, 12]
 POLICY_BLUE = CMAP["policy"]     # #2a78d6
 ROLL_TEAL = CMAP["roll"]         # #1baf7a
+
+# Okabe-Ito qualitative palette (colour-blind safe) for the 6 campuses -- kept
+# deliberately DISJOINT from the frozen method palette in p5_figures, with two
+# fixed points: campus 1 is the recessive grey and campus 12 the teal-green in
+# EVERY figure that names campuses, so a campus keeps one colour across the
+# paper (the priority figure draws exactly those two). The remaining four take
+# Okabe-Ito hues that stay apart from the teal.
+CAMP_COL = {1: MUTE, 2: "#56B4E9", 5: "#CC79A7",
+            9: "#0072B2", 10: "#D55E00", 12: ROLL_TEAL}
 
 
 def _kfmt(n):
@@ -52,6 +70,97 @@ def _kfmt(n):
     if n >= 1000:
         return f"{n/1000:.0f}k"
     return f"{n:.0f}"
+
+
+# ============================================================================
+# F8 data step: the FULL-CORPUS corrective close-time profile
+# ============================================================================
+# The v1.1 corpus fits the priority mapping on the training years only, so
+# results/p1_calib/priority_mapping.csv carries the medians of that window --
+# for campus 2 a few hundred labelled corrective orders, whose medians run to
+# more than a thousand days and cannot support the descriptive claim the figure
+# makes. The figure therefore plots the profile over the WHOLE corpus, which is
+# the descriptive check that realised close time tracks the campus's own text
+# labels; the mapping the benchmark uses is still the train-only one, and the
+# two agree on every class of every campus this figure shows.
+CACHE_DIR = Path(ROOT) / "results" / "p1_calib"
+CACHE_CSV = CACHE_DIR / "priority_mapping_fullcorpus.csv"
+MACROS_TEX = Path(ROOT) / "paper" / "macros.tex"
+
+
+def _macro(name):
+    """Value of \\newcommand{\\<name>}{...} in paper/macros.tex, as a float."""
+    txt = MACROS_TEX.read_text(encoding="utf-8")
+    m = re.search(r"\\newcommand\{\\" + name + r"\}\{([^}]*)\}", txt)
+    if m is None:
+        raise SystemExit(f"macro \\{name} not found in {MACROS_TEX}")
+    return float(m.group(1).replace("{,}", "").replace(",", ""))
+
+
+def full_corpus_priority_profile(rebuild=False):
+    """Per-(campus, raw value, pm/cm) priority table fitted on the FULL corpus.
+
+    Deterministic function of the raw CSV: ``fmwos.io.clean(dominant_sort=
+    "stable")`` (corpus v1.1) followed by ``fmwos.calib.build_priority_mapping
+    (fit_end=None)``, i.e. exactly what the loaders build, with the fit window
+    opened to every year. Cached under data/processed/ because it reads the
+    1.4 GB raw file; delete the cache or pass ``rebuild`` to recompute.
+    """
+    if CACHE_CSV.exists() and not rebuild:
+        return pd.read_csv(CACHE_CSV)
+    from fmwos import calib, io  # noqa: E402  (heavy import, only on a rebuild)
+    raw_csv = Path(ROOT) / "data" / "raw" / "FMUCD.csv"
+    print(f"   computing the full-corpus priority profile from {raw_csv} ...",
+          flush=True)
+    clean, _audit = io.clean(io.load_raw(raw_csv), dominant_sort="stable")
+    prof = calib.build_priority_mapping(clean, fit_end=None)
+    prof = prof[prof["campus"].isin(calib.CAMPUSES)].reset_index(drop=True)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    prof.to_csv(CACHE_CSV, index=False)
+    print(f"   wrote {CACHE_CSV} ({len(prof)} rows)", flush=True)
+    return prof
+
+
+def _check_profile(prof, train):
+    """Hard-abort unless the plotted profile matches the manuscript macros.
+
+    Three invariants, all read from files rather than typed here:
+      1. campus 2's three text labels reproduce \\ctwourgent, \\ctworoutine and
+         \\ctwoemergency to one decimal;
+      2. the two Spearman coefficients the caption prints reproduce \\conerho
+         and \\ctwelverho to two decimals;
+      3. the classes the train-only mapping assigns on the three campuses this
+         figure shows are the classes a full-corpus fit would assign, so the
+         profile is a descriptive check of the mapping actually used and not a
+         different mapping.
+    """
+    cm = prof[prof.is_pm_split == "cm"]
+    c2 = cm[cm.campus == 2].set_index("raw_value")["median_cm_duration_days"]
+    for raw, macro in (("2-URGENT", "ctwourgent"),
+                       ("4-ROUTINE", "ctworoutine"),
+                       ("1-EMERGENCY", "ctwoemergency")):
+        got, want = round(float(c2.loc[raw]), 1), _macro(macro)
+        if abs(got - want) > 1e-9:
+            raise SystemExit(f"f8: campus 2 {raw} median {got} d does not match "
+                             f"\\{macro} = {want} d")
+    for camp, macro in ((1, "conerho"), (12, "ctwelverho")):
+        s = cm[(cm.campus == camp) & (cm.rule == "r5c")]
+        got, want = round(float(s.spearman_rho.iloc[0]), 2), _macro(macro)
+        if abs(got - want) > 1e-9:
+            raise SystemExit(f"f8: campus {camp} Spearman rho {got} does not "
+                             f"match \\{macro} = {want}")
+    key = ["campus", "raw_value", "is_pm_split"]
+    j = train.merge(prof, on=key, how="inner", suffixes=("_tr", "_full"))
+    j = j[j.campus.isin([1, 2, 12])]
+    bad = j[j.mapped_class_tr != j.mapped_class_full]
+    if len(bad):
+        raise SystemExit("f8: train-only and full-corpus fits disagree on a "
+                         f"class of campus 1/2/12:\n{bad[key]}")
+    print(f"   f8 asserts: campus 2 urgent/routine/emergency = "
+          f"{_macro('ctwourgent')}/{_macro('ctworoutine')}/"
+          f"{_macro('ctwoemergency')} d; rho c1 {_macro('conerho')}, "
+          f"c12 {_macro('ctwelverho')}; {len(j)} shared mapping keys on "
+          f"campuses 1, 2 and 12, all with the same class")
 
 
 # ============================================================================
@@ -75,39 +184,48 @@ def fig7_data():
     g = ar6.groupby(["UniversityID", "month"])["rows"].sum().reset_index()
     g["yr"] = g["month"].str.slice(0, 4).astype(int) + \
         (g["month"].str.slice(5, 7).astype(int) - 1) / 12.0
-    ends = []
     for c in SCHEDULABLE:
         s = g[g.UniversityID == c].sort_values("yr")
         axA.plot(s.yr, s.rows, "-", color=CAMP_COL[c], lw=0.9, alpha=0.95,
                  zorder=3, solid_capstyle="round")
-        # label at the recent-plateau level (median of last 6 months), not the
-        # partial final-month cliff, so the tag sits where the line reads.
-        ends.append((c, float(s.yr.iloc[-1]), float(s.rows.tail(6).median())))
     axA.set_yscale("log")
     axA.set_ylim(0.7, 40000)
-    axA.set_xlim(2002, 2024.3)
+    axA.set_xlim(2002, 2021.9)
     axA.set_xticks([2004, 2008, 2012, 2016, 2020])
     axA.set_xticklabels(["'04", "'08", "'12", "'16", "'20"], fontsize=6.2)
     axA.set_yticks([1, 10, 100, 1000, 10000])
     axA.set_yticklabels(["1", "10", "100", "1k", "10k"], fontsize=6.2)
     axA.grid(axis="y", which="major", color=GRID, linewidth=0.4)
-    # direct labels near each line end; the four campuses that converge to ~1.8k
-    # WOs/month get nudged apart in log space and a white halo so each c-tag
-    # stays legible over the tangle (a small vertical float is unavoidable when
-    # lines converge -- colour + x-position tie each tag to its line).
-    # four campuses converge to ~1.8k WOs/mo; direct tags are pushed apart in
-    # log space to a spacing that clears the digit cap-height (no ink overlap),
-    # smaller font + a stronger white halo keep each tag legible over the tangle.
-    ends.sort(key=lambda t: t[2])
-    last_ly = -1e9
-    for c, xe, ye in ends:
-        ly = np.log10(max(ye, 1.0))
-        if ly - last_ly < 0.22:
-            ly = last_ly + 0.22
-        last_ly = ly
-        axA.text(xe + 0.3, 10 ** ly, f"c{c}", color=CAMP_COL[c],
-                 fontsize=5.6, ha="left", va="center", weight="bold",
-                 path_effects=[pe.withStroke(linewidth=2.4, foreground=SURF)])
+    # Direct labels, one per curve. Every tag is anchored where its OWN curve
+    # runs clear of the others, and its leader is a short solid vertical stub in
+    # the campus's colour: no two leaders meet, and none crosses another
+    # campus's line. Labelling at the right-hand ends instead would fan six
+    # leaders out of one point, because four campuses plateau within a factor
+    # of two of each other and every series closes on a partial-month drop.
+    # (year on the curve, label height, side)
+    TAGS = {5: (2005.5, 6500.0, "up"), 10: (2018.5, 27000.0, "up"),
+            9: (2010.5, 48.0, "up"), 1: (2014.2, 95.0, "up"),
+            2: (2017.0, 170.0, "up"), 12: (2020.7, 620.0, "down")}
+    for c, (xa, ylab, side) in TAGS.items():
+        s = g[g.UniversityID == c].sort_values("yr")
+        i = int((s.yr - xa).abs().values.argmin())
+        xf, yf = float(s.yr.iloc[i]), float(s.rows.iloc[i])
+        # thin dark stub with a dot on the curve: a leader in the campus
+        # colour would read as one more spike of a spiky series, and a mid-grey
+        # one would read as campus 1's own line
+        axA.plot([xf], [yf], marker="o", markersize=2.0, color=CAMP_COL[c],
+                 markeredgecolor=SURF, markeredgewidth=0.4, zorder=7)
+        if side == "up":
+            axA.plot([xf, xf], [yf * 1.35, ylab * 0.80], color=INK2, lw=0.45,
+                     solid_capstyle="butt", zorder=6)
+            va = "bottom"
+        else:
+            axA.plot([xf, xf], [yf * 0.74, ylab * 1.30], color=INK2, lw=0.45,
+                     solid_capstyle="butt", zorder=6)
+            va = "top"
+        axA.text(xf, ylab, f"c{c}", color=INK, fontsize=5.8, ha="center",
+                 va=va, weight="bold", zorder=7,
+                 path_effects=[pe.withStroke(linewidth=2.2, foreground=SURF)])
     axA.set_ylabel("work orders / month  (log)", fontsize=6.9)
     axA.set_title("(a)  Monthly arrivals", loc="left", fontsize=7.4,
                   color=INK, weight="bold", pad=5)
@@ -128,16 +246,17 @@ def fig7_data():
     axB.set_ylim(0, ymax)
     # 'median' is the widest tag and its line sits closest to p90; place it to
     # the LEFT of its dashed line (clear top-left space) so it never reaches the
-    # p90 line. p90 / p99 stay to the right of their lines.
+    # p90 line. p90 / p99 stay to the right of their lines. Each tag keeps a
+    # clear gap from the rule it names, so no glyph touches a dashed stroke.
     for xv, lab, side in [(med, "median\n1.0 h", "l"), (p90, "p90\n6 h", "r"),
                           (p99, "p99\n49 h", "r")]:
         axB.axvline(xv, color=INK2, lw=0.8, ls=(0, (3, 2)), zorder=4)
         if side == "l":
-            axB.text(xv * 0.92, ymax * 0.93, lab, fontsize=5.7, color=INK2,
-                     ha="right", va="top", linespacing=0.9)
+            axB.text(xv * 0.80, ymax * 0.93, lab, fontsize=5.7, color=INK,
+                     ha="right", va="top", linespacing=1.05)
         else:
-            axB.text(xv * 1.08, ymax * 0.93, lab, fontsize=5.7, color=INK2,
-                     ha="left", va="top", linespacing=0.9)
+            axB.text(xv * 1.25, ymax * 0.93, lab, fontsize=5.7, color=INK,
+                     ha="left", va="top", linespacing=1.05)
     axB.set_xticks([0.1, 1, 10, 100])
     axB.set_xticklabels(["0.1", "1", "10", "100"], fontsize=6.2)
     axB.yaxis.set_major_formatter(
@@ -160,20 +279,22 @@ def fig7_data():
         axC.barh(y, pm, height=0.66, left=1 - pm, color=pm_col, alpha=0.95,
                  edgecolor=SURF, linewidth=0.5, zorder=3)
         axC.text(1.02, y, _kfmt(r.rows), va="center", ha="left",
-                 fontsize=6.0, color=INK2)
-    # direct segment labels once, on the top bar (highest pm share)
+                 fontsize=6.0, color=INK)
+    # a two-key inline legend above the top bar: the colour lives in the swatch,
+    # the word is black (the top bar's corrective segment is too short to carry
+    # a centred word without overhanging the axis)
     ytop = ypos[-1]
-    rtop = pc6.iloc[-1]
-    axC.text((1 - rtop.pm_share) / 2, ytop + 0.52, "corrective", ha="center",
-             va="bottom", fontsize=5.8, color=cm_col, weight="bold")
-    axC.text(1 - rtop.pm_share / 2, ytop + 0.52, "preventive", ha="center",
-             va="bottom", fontsize=5.8, color="#5f7a94", weight="bold")
+    for x0, col, lab in [(0.00, cm_col, "corrective"), (0.52, pm_col, "preventive")]:
+        axC.add_patch(Rectangle((x0, ytop + 0.43), 0.055, 0.20, facecolor=col,
+                                edgecolor="none", clip_on=False, zorder=4))
+        axC.text(x0 + 0.085, ytop + 0.53, lab, ha="left", va="center",
+                 fontsize=5.8, color=INK, zorder=4)
     axC.set_yticks(ypos)
     axC.set_yticklabels([f"c{int(c)}" for c in pc6.UniversityID], fontsize=6.6,
                         color=INK)
     axC.set_xlim(0, 1.16)
     axC.set_xticks([0, 0.5, 1.0])
-    axC.set_xticklabels(["0", ".5", "1"], fontsize=6.2)
+    axC.set_xticklabels(["0", "0.5", "1"], fontsize=6.2)
     axC.set_ylim(-0.6, len(pc6) - 0.1)
     axC.set_xlabel("share of work orders", fontsize=6.9)
     axC.set_title("(c)  Preventive share", loc="left", fontsize=7.4,
@@ -193,13 +314,16 @@ def fig7_data():
              for _, r in top.iterrows()]
     rows_.append(("other", "", other / tot))
     ypos = np.arange(len(rows_))[::-1]
+    # the residual bar stays in the same neutral family as the named trades, a
+    # lighter tint of the same hue, so its colour reads as "the rest of the same
+    # thing" rather than as a second category
     for y, (code, desc, sh) in zip(ypos, rows_):
-        c = MUTE if code == "other" else "#6b7a86"
+        c = "#aeb9c2" if code == "other" else "#6b7a86"
         axD.barh(y, sh * 100, height=0.68, color=c, alpha=0.92,
                  edgecolor=SURF, linewidth=0.5, zorder=3)
         lab = f"{desc}  {sh*100:.0f}%" if desc else f"{sh*100:.0f}%"
         axD.text(sh * 100 + 0.8, y, lab, va="center", ha="left",
-                 fontsize=5.7, color=INK2)
+                 fontsize=5.7, color=INK)
     axD.set_yticks(ypos)
     axD.set_yticklabels([r[0] for r in rows_], fontsize=6.0, color=INK)
     axD.set_xlim(0, 62)
@@ -217,80 +341,97 @@ def fig7_data():
 # F8  the raw priority field cannot be read naively (2 panels)
 # ============================================================================
 def fig8_priority():
-    pm = pd.read_csv(f"{ROOT}/results/p1_calib/priority_mapping.csv")
-    cm = pm[pm.is_pm_split == "cm"].copy()
+    # The profile is the full corpus; the CLASSES are the ones the benchmark
+    # actually uses, i.e. the train-only fit released in results/p1_calib.
+    train = pd.read_csv(f"{ROOT}/results/p1_calib/priority_mapping.csv")
+    prof = full_corpus_priority_profile()
+    _check_profile(prof, train)
+    cm = prof[prof.is_pm_split == "cm"].copy()
 
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=figsize(88, 62),
-                                   gridspec_kw=dict(wspace=0.18))
+    # Designed at the printed width, so a 6 pt label prints at 6 pt.
+    fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, 58))
+    gs = fig.add_gridspec(1, 2, left=0.088, right=0.995, top=0.885,
+                          bottom=0.165, wspace=0.22)
+    axA, axB = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1])
 
-    # ---- (a) campus 2, labelled scale, bars ordered by realized duration ----
+    # ---- (a) campus 2, labelled scale, bars ordered by realised close time --
     style_ax(axA)
-    c2 = cm[(cm.campus == 2)].dropna(subset=["median_cm_duration_days"])
+    C2_FILL, C2_EDGE = "#8fbadd", "#4f81ad"     # one hue: these are one campus
+    c2 = cm[cm.campus == 2].dropna(subset=["median_cm_duration_days"])
     c2 = c2.sort_values("median_cm_duration_days")
     labels = [r.raw_value.split("-", 1)[-1].title() for _, r in c2.iterrows()]
-    dur = c2.median_cm_duration_days.to_numpy()
-    klass = c2.mapped_class.to_numpy()
-    ypos = np.arange(len(c2))
-    kcol = {1: CMAP["mor"], 2: CMAP["wspt"], 3: "#5f8fce", 4: MUTE}
-    # Value labels go INSIDE the bar (white, right-aligned) whenever the bar is
-    # long enough to hold them; only short bars get an outside label. This keeps
-    # the whole right margin of panel (a) clear of panel (b)'s vertical y-label.
-    for y, d, lab, k in zip(ypos, dur, labels, klass):
-        axA.barh(y, d, height=0.62, color=kcol.get(int(k), MUTE), alpha=0.9,
-                 edgecolor=SURF, linewidth=0.5, zorder=3)
-        txt = f"{d:.1f} d  →P{int(k)}"
-        if d >= 3.5:  # inside the bar, white
-            axA.text(d - 0.18, y, txt, va="center", ha="right", fontsize=5.9,
-                     color="#ffffff", weight="bold", zorder=4)
-        else:         # short bar: outside, ink (stays well inside panel a)
-            axA.text(d + 0.14, y, txt, va="center", ha="left", fontsize=5.9,
-                     color=INK2, zorder=4)
+    dur = c2.median_cm_duration_days.to_numpy(dtype=float)
+    nrows = c2.rows.to_numpy(dtype=int)
+    klass = c2.mapped_class.to_numpy(dtype=int)
+    # fastest-closing label on top, so the panel reads down the urgency order
+    ypos = np.arange(len(c2))[::-1]
+    # room for the bar-end annotation, measured from the data rather than frozen
+    xmax = float(dur.max()) * 1.45
+    for y, d, k in zip(ypos, dur, klass):
+        axA.barh(y, d, height=0.55, color=C2_FILL, edgecolor=C2_EDGE,
+                 linewidth=0.5, zorder=3)
+        axA.text(d + 0.022 * xmax, y, f"{d:.1f} d     class P{k}",
+                 va="center", ha="left", fontsize=6.2, color=INK, zorder=4)
     axA.set_yticks(ypos)
-    axA.set_yticklabels(labels, fontsize=6.4, color=INK)
-    axA.set_xlim(0, 7.0)
-    axA.set_xticks([0, 2, 4, 6])
-    axA.set_xlabel("median close time (days)", fontsize=6.8)
+    axA.set_yticklabels([f"{lab}\nn = {n:,}" for lab, n in zip(labels, nrows)],
+                        fontsize=6.2, color=INK, linespacing=1.25)
+    axA.set_xlim(0, xmax)
+    axA.set_xticks([0, 2, 4, 6, 8])
+    axA.tick_params(axis="x", labelsize=6.2)
+    axA.set_xlabel("median close time of corrective orders (days)", fontsize=6.8)
     axA.set_ylim(-0.6, len(c2) - 0.4)
     axA.grid(axis="x", which="major", color=GRID, linewidth=0.4)
     axA.set_title("(a)  Campus 2: text scale", loc="left", fontsize=7.3,
                   color=INK, weight="bold", pad=4)
-    axA.text(0.97, 0.06, "labels sort\nby urgency", transform=axA.transAxes,
-             fontsize=5.8, color=INK2, style="italic", va="bottom", ha="right",
-             linespacing=0.95)
 
     # ---- (b) campus 12 numeric codes invert urgency (+ campus 1 contrast) ---
     style_ax(axB)
-    for camp, col, faint, tag in [(1, MUTE, True, "c1"),
-                                  (12, ROLL_TEAL, False, "c12")]:
+    codes, durs = {}, {}
+    # colour is a non-text mark here: campus 1 recessive grey, campus 12 in the
+    # focal green; the tag beside each line is black and a short leader in the
+    # line's own colour ties it to its series.
+    SERIES = [(1, MUTE, 1.0, 3.2, 0.9, "Campus 1", "last", (1.2, 3.6)),
+              (12, ROLL_TEAL, 1.7, 4.2, 1.0, "Campus 12", "first", (2.2, 5.2))]
+    for camp, col, lw, ms, alpha, tag, anchor, (dx, dy) in SERIES:
         s = cm[(cm.campus == camp) & (cm.rule == "r5c")].copy()
         s["code"] = s.raw_value.astype(float)
         s = s.sort_values("code")
+        codes[camp] = s.code.to_numpy(dtype=float)
+        durs[camp] = s.median_cm_duration_days.to_numpy(dtype=float)
         rho = float(s.spearman_rho.iloc[0])
-        lw = 1.0 if faint else 1.6
-        alpha = 0.5 if faint else 1.0
         axB.plot(s.code, s.median_cm_duration_days, "-o", color=col, lw=lw,
-                 markersize=3.0 if faint else 4.0, markeredgecolor=SURF,
-                 markeredgewidth=0.5, alpha=alpha, zorder=3 if faint else 5)
-        # tag the series at its last point
-        xe = float(s.code.iloc[-1]); ye = float(s.median_cm_duration_days.iloc[-1])
-        axB.annotate(f"{tag}  $\\rho$={rho:+.2f}",
-                     (xe, ye), xytext=(6 if camp == 12 else 2,
-                                       -8 if camp == 12 else 9),
-                     textcoords="offset points",
-                     fontsize=6.0, color=col, weight="bold",
-                     ha="left", va="center")
-    axB.annotate("higher code =\nmore urgent", xy=(50, 1.5), xytext=(40, 33),
-                 fontsize=5.8, color=ROLL_TEAL, ha="center", va="center",
-                 arrowprops=dict(arrowstyle="-|>", color=ROLL_TEAL, lw=0.8,
-                                 connectionstyle="arc3,rad=-0.25"))
-    axB.set_xlim(-4, 56)
-    axB.set_ylim(0, 72)
+                 markersize=ms, markeredgecolor=SURF, markeredgewidth=0.5,
+                 alpha=alpha, zorder=3 if camp == 1 else 5)
+        i = -1 if anchor == "last" else 0
+        xe, ye = float(s.code.iloc[i]), float(s.median_cm_duration_days.iloc[i])
+        # leader in the series colour, label in black: the r4 direct-label rule
+        axB.plot([xe, xe + dx], [ye, ye + dy], color=col, lw=0.6, zorder=4)
+        # literal rho rather than mathtext: the serif face carries the glyph, so
+        # the figure stays in one Times family (mathtext would embed STIX). The
+        # sign is a true minus, matching the plus of the other series.
+        axB.text(xe + dx + 0.5, ye + dy,
+                 f"{tag}   ρ = {rho:+.2f}".replace("-", "−"),
+                 fontsize=6.2, color=INK, ha="left", va="center", zorder=6)
+    # campus 12's own codes, direct-labelled: the caption's claim is about which
+    # code closes fastest, so the reader must be able to read it off the panel.
+    # All four sit on the same side of the line, so the row reads as one row.
+    for xc, yc in zip(codes[12], durs[12]):
+        axB.text(xc, yc + 3.0, f"{int(xc)}", fontsize=5.8, color=INK,
+                 ha="center", va="bottom", zorder=6)
+    all_codes = np.concatenate([codes[1], codes[12]])
+    all_durs = np.concatenate([durs[1], durs[12]])
+    xlo, xhi = float(all_codes.min()), float(all_codes.max())
+    pad = 0.06 * (xhi - xlo)
+    axB.set_xlim(xlo - pad, xhi + pad)
+    axB.set_ylim(0, float(np.nanmax(all_durs)) * 1.20)
+    axB.set_xticks([0, 10, 20, 30, 40, 50])
+    axB.tick_params(axis="both", labelsize=6.2)
     axB.set_xlabel("raw priority code (campus-specific)", fontsize=6.8)
-    axB.set_ylabel("median close time (days)", fontsize=6.8)
+    axB.set_ylabel("median close time of corrective orders (days)", fontsize=6.8)
     axB.grid(axis="y", which="major", color=GRID, linewidth=0.4)
     axB.set_title("(b)  Numeric codes invert", loc="left", fontsize=7.3,
                   color=INK, weight="bold", pad=4)
-    save(fig, "f8_priority")
+    save(fig, "f8_priority", tight=False)
 
 
 # ============================================================================
@@ -304,8 +445,15 @@ def fig9_training():
     _blu = _mpl.colormaps["Blues"]
     blues = [_blu(0.35 + 0.06 * i) for i in range(len(seeds))]
 
-    fig, (axA, axB) = plt.subplots(2, 1, figsize=figsize(88, 60), sharex=True,
-                                   gridspec_kw=dict(hspace=0.28, height_ratios=[1, 1]))
+    # Designed at the printed width (as f8 is), so a 6.9 pt label prints at
+    # 6.9 pt; the old single-column canvas was enlarged by 1.87 on the page and
+    # printed its text at 12 to 15 pt.
+    fig, (axA, axB) = plt.subplots(2, 1, figsize=figsize(TEXTWIDTH_MM, 88),
+                                   sharex=True,
+                                   gridspec_kw=dict(hspace=0.26,
+                                                    height_ratios=[1, 1],
+                                                    left=0.070, right=0.980,
+                                                    top=0.940, bottom=0.105))
 
     # ---- (a) default-capacity dev: flat plateau ----------------------------
     style_ax(axA)
@@ -322,9 +470,9 @@ def fig9_training():
     axA.set_yticks([410, 415, 420, 425])
     axA.tick_params(axis="y", labelsize=6.2)
     axA.text(595, 411.6, "plateau: all variants 409–411", fontsize=5.9,
-             color=INK2, ha="right", va="bottom", style="italic")
+             color=INK, ha="right", va="bottom", style="italic")
     axA.set_ylabel("dev TWT", fontsize=6.9)
-    axA.set_title("(a)  default-capacity dev set $\\cdot$ 10 seeds", loc="left", fontsize=7.3,
+    axA.set_title("(a)  default-capacity development set \u00b7 10 seeds", loc="left", fontsize=7.3,
                   color=INK, weight="bold", pad=4)
 
     # ---- (b) tight-capacity dev (m=0.6): declining + selected checkpoints ---
@@ -343,16 +491,20 @@ def fig9_training():
     axB.set_ylim(423, 500)
     axB.set_yticks([440, 460, 480, 500])
     axB.tick_params(axis="y", labelsize=6.2)
-    axB.text(300, 494, "selected checkpoint = per-seed minimum ($\\blacktriangledown$)",
+    axB.text(300, 493, "selected checkpoint = per-seed minimum (\u25bc)",
              fontsize=5.8, color=INK2, ha="center", va="center", style="italic")
+    # the early updates of several seeds run above the panel; say so rather than
+    # let a reader read the clipped start as a curve that begins at 500
+    axB.text(590, 497.5, "traces clipped above 500", fontsize=5.8, color=INK,
+             ha="right", va="center", style="italic")
     axB.set_ylabel("dev TWT", fontsize=6.9)
     axB.set_xlim(0, 600)
     axB.set_xticks([0, 150, 300, 450, 600])
     axB.tick_params(axis="x", labelsize=6.2)
     axB.set_xlabel("PPO update", fontsize=6.9)
-    axB.set_title("(b)  tight-capacity dev set (m=0.6) $\\cdot$ 10 seeds", loc="left",
+    axB.set_title("(b)  tight-capacity development set (m=0.6) \u00b7 10 seeds", loc="left",
                   fontsize=7.3, color=INK, weight="bold", pad=4)
-    save(fig, "f9_training")
+    save(fig, "f9_training", tight=False)
 
 
 # ============================================================================
@@ -373,7 +525,7 @@ def fig10_rolling():
     ao = by[("0102", "arrival-only")]
     pe = by[("0102", "periodic")]
     horizon = max(ao["makespan"], pe["makespan"]) * 1.02
-    lanes = [(1, ao, "arrival-only trigger", CMAP["mor"]),
+    lanes = [(1, ao, "arrival-only trigger", CMAP["lpt"]),
              (0, pe, "periodic + arrival", INK)]
     for y, rec, name, col in lanes:
         t = sorted(rec["replan_times_bh"])
@@ -383,11 +535,11 @@ def fig10_rolling():
         gi = int(np.argmax(gaps))
         if y == 1:  # shade the stale span in the arrival-only lane only
             axA.add_patch(Rectangle((ext[gi], y - 0.28), gaps[gi], 0.56,
-                          facecolor=CMAP["mor"], alpha=0.14, edgecolor="none",
+                          facecolor=CMAP["lpt"], alpha=0.14, edgecolor="none",
                           zorder=1))
             axA.text((ext[gi] + ext[gi + 1]) / 2, y + 0.32,
                      "stale plan executes uncorrected",
-                     ha="center", va="bottom", fontsize=5.9, color=CMAP["mor"],
+                     ha="center", va="bottom", fontsize=5.9, color=CMAP["lpt"],
                      style="italic")
         axA.hlines(y, 0, rec["makespan"], color=AXIS, lw=0.6, zorder=2)
         for tv in t:
@@ -435,7 +587,7 @@ def fig10_rolling():
         p = by[(sid, "periodic")]
         ya, yp, ye = a["wwt"], p["wwt"], a["edd_wwt"]
         axB.plot([xa, xp], [ya, yp], "-", color=MUTE, lw=1.0, zorder=2)
-        axB.plot(xa, ya, "o", color=CMAP["mor"], markersize=5.0,
+        axB.plot(xa, ya, "o", color=CMAP["lpt"], markersize=5.0,
                  markeredgecolor=SURF, markeredgewidth=0.7, zorder=5)
         axB.plot(xp, yp, "o", color=ROLL_TEAL, markersize=5.0,
                  markeredgecolor=SURF, markeredgewidth=0.7, zorder=5)
@@ -455,7 +607,7 @@ def fig10_rolling():
             axB.text(xp + 0.19, FLOOR, "EDD 0\n(log floor)", fontsize=5.2,
                      color=INK2, va="center", ha="left", linespacing=0.9)
         # arrival-only value (left of the red dot)
-        axB.text(xa - 0.07, ya, fmt_wwt(ya), fontsize=5.9, color=CMAP["mor"],
+        axB.text(xa - 0.07, ya, fmt_wwt(ya), fontsize=5.9, color=CMAP["lpt"],
                  ha="right", va="center", weight="bold")
         # periodic value (teal): hand-placed left of the EDD tick, clear of the
         # crossing lines and of the neighbouring periodic label

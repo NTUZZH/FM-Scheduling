@@ -34,7 +34,7 @@ EXPECTED_FIELDS = [
     "mean_flow", "breach_share", "breach_p1", "breach_p2", "breach_p3",
     "breach_p4", "wall_seconds",
 ]
-EXPECTED_METHODS = {"edd", "wspt", "atc", "pfifo", "mor", "random",
+EXPECTED_METHODS = {"edd", "wspt", "atc", "pfifo", "lpt", "random",
                     "rl301", "rl302", "rl303"}
 
 

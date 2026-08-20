@@ -1,0 +1,85 @@
+{
+  "experiment": "r4_pmodel",
+  "protocol": "R4.7",
+  "generated": "2026-08-19T18:58:59",
+  "start_time": "2026-08-19T18:58:33",
+  "elapsed_seconds": 26.334,
+  "smoke": false,
+  "base_set": "Eval-B replay",
+  "base_instances": 227,
+  "anchors": 227,
+  "p_models": [
+    {
+      "model": "sum",
+      "suffix": "_psum"
+    },
+    {
+      "model": "max",
+      "suffix": "_pmax"
+    },
+    {
+      "model": "single",
+      "suffix": "_pone"
+    }
+  ],
+  "crew_q": 0.95,
+  "fit_end": "2017-12-31 23:59:59",
+  "labor_cap_q": 0.995,
+  "corpus_cleaning": "v1.1 (stable dominant-line sort), re-implemented in this script for the aggregation switch",
+  "per_model": {
+    "sum": {
+      "work_orders": 1454039,
+      "r4_labor_cap_hours": 90.86480000000446,
+      "pm_share": 0.6157439290128627,
+      "mean_p_bh": 3.2188530052495374,
+      "instances_built": 227,
+      "anchors_skipped": 0
+    },
+    "max": {
+      "work_orders": 1454039,
+      "r4_labor_cap_hours": 43.881000000005585,
+      "pm_share": 0.6157439290128627,
+      "mean_p_bh": 2.3613048720151517,
+      "instances_built": 227,
+      "anchors_skipped": 0
+    },
+    "single": {
+      "work_orders": 1316010,
+      "r4_labor_cap_hours": 40.0,
+      "pm_share": 0.6230534337200841,
+      "mean_p_bh": 2.1349873741840875,
+      "instances_built": 226,
+      "anchors_skipped": 1
+    }
+  },
+  "instances_dir": "./results/r4_robustness/pmodel/instances",
+  "rules": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random"
+  ],
+  "dispatch_seed": 301,
+  "policy_pool": [
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310"
+  ],
+  "policy_dir": "./results/p3_train/v2",
+  "workers": 12,
+  "n_configs": 680,
+  "n_rows": 11560,
+  "n_errors": 0,
+  "n_infeasible": 0,
+  "git_describe": "paper-v4-25-gbe054c7f-dirty"
+}

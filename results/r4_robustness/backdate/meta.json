@@ -1,0 +1,51 @@
+{
+  "experiment": "r4_backdate",
+  "protocol": "R4.9",
+  "generated": "2026-08-19T18:59:28",
+  "start_time": "2026-08-19T18:59:18",
+  "elapsed_seconds": 9.681,
+  "smoke": false,
+  "base_set": "Eval-B replay",
+  "base_instances": 227,
+  "id_suffix": "_bd",
+  "backdate_seed": 424242,
+  "max_shift_frac": 0.5,
+  "delta_key_scheme": "numpy.random.default_rng([424242, uint64(blake2b-8('<base_instance_id>|<wo_id>'))]).uniform(0, 0.5*SLA)",
+  "sla_bh": {
+    "1": 8.0,
+    "2": 24.0,
+    "3": 80.0,
+    "4": 171.4
+  },
+  "preventive_orders_untouched": true,
+  "window_bh_unchanged": true,
+  "rules": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random"
+  ],
+  "dispatch_seed": 301,
+  "policy_pool": [
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310"
+  ],
+  "policy_dir": "./results/p3_train/v2",
+  "workers": 12,
+  "n_configs": 227,
+  "n_rows": 3859,
+  "n_errors": 0,
+  "n_infeasible": 0,
+  "git_describe": "paper-v4-25-gbe054c7f-dirty"
+}

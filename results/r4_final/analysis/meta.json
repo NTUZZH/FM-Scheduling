@@ -1,0 +1,123 @@
+{
+  "script": "scripts/r4_analysis.py",
+  "generated": "2026-08-19T18:21:52",
+  "elapsed_seconds": 77.103263,
+  "input_csv": "./results/r4_final/results.csv",
+  "input_meta": "./results/r4_final/meta.json",
+  "value_col": "wwt",
+  "n_boot": 10000,
+  "seed": 12345,
+  "alpha": 0.05,
+  "margin_abs": 1.0,
+  "margin_rel": 0.01,
+  "verdict_campuses": [
+    5,
+    9,
+    10,
+    12
+  ],
+  "full_coverage_methods": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random",
+    "rl301",
+    "rl302",
+    "rl303",
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310",
+    "v2at301",
+    "v2at302",
+    "v2at303",
+    "v2at304",
+    "v2at305",
+    "v2at306",
+    "v2at307",
+    "v2at308",
+    "v2at309",
+    "v2at310"
+  ],
+  "pools": [
+    "v2pool",
+    "v2attnpool"
+  ],
+  "sanity_checks": [
+    {
+      "check": "n_configs vs meta.json",
+      "got": 887,
+      "want": 887,
+      "ok": true
+    },
+    {
+      "check": "n_rows vs meta.json",
+      "got": 26770,
+      "want": 26770,
+      "ok": true
+    },
+    {
+      "check": "n_infeasible vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "n_errors vs meta.json",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "empirical configs vs meta.json",
+      "got": 587,
+      "want": 587,
+      "ok": true
+    },
+    {
+      "check": "generator configs vs meta.json",
+      "got": 300,
+      "want": 300,
+      "ok": true
+    },
+    {
+      "check": "rolling configs vs meta.json",
+      "got": 160,
+      "want": 160,
+      "ok": true
+    },
+    {
+      "check": "methods present vs meta.json",
+      "got": 31,
+      "want": 31,
+      "ok": true
+    },
+    {
+      "check": "every non-rolling method covers every configuration",
+      "got": 887,
+      "want": 887,
+      "ok": true
+    },
+    {
+      "check": "no rolling row on generator cells",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    },
+    {
+      "check": "value column has no missing entry",
+      "got": 0,
+      "want": 0,
+      "ok": true
+    }
+  ]
+}

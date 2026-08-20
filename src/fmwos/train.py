@@ -24,10 +24,21 @@ planned").  Replay half: with prob 2/3 apply ``tightness.scale_crew`` at m in
 curriculum; a second dev metric ``dev_wwt_tight`` (the same dev instances scaled
 to m=0.6) is always reported.
 
+Preventive visibility (``--visibility {0,8,40,full}``, R4.6): maps to the env's
+``visibility_L`` in {0.0, 8.0, 40.0, None} and, whenever the flag is given (0
+included), builds every training and dev-evaluation env with
+``lookahead_features=True``.  All four arms therefore share the identical widened
+architecture (F_CTX = 13), so any gain at L > 0 is attributable to the
+information and not to capacity; the L = 0 arm is the information control.  The
+policy is sized from the env's own ``f_ctx``, and ``--out`` defaults to
+``results/p3_train/vis{0|8|40|full}/seed<NNN>/``.  Without the flag nothing
+changes: envs are built exactly as before and F_CTX stays 10.
+
 CLI
 ---
 python -m fmwos.train --seed 301 --updates 300 --out results/p3_train/seed301
 python -m fmwos.train --curriculum v2 --seed 401 --out results/p3_train/v2_401
+python -m fmwos.train --curriculum v2 --visibility 40 --seed 501   # R4.6 arm
 python -m fmwos.train --seed 301 --smoke --out /tmp/.../p3smoke   # 3 updates, cpu
 Writes config.json, curves.csv (update, mean_train_return, dev_wwt_mean,
 dev_wwt_tight, entropy, value_loss, seconds), best.pt, final.pt.
@@ -46,7 +57,7 @@ import time
 import numpy as np
 import torch
 
-from .env import DispatchEnv
+from .env import DispatchEnv, F_CTX
 from .policy import DispatchPolicy
 from . import validator
 from . import tightness
@@ -56,6 +67,9 @@ _INST_ROOT = os.path.join(_ROOT, "data", "processed", "instances")
 _PARAM_ROOT = os.path.join(_ROOT, "results", "p2_generator")
 _TRAIN_ANCHOR_MAX = "2017-12-31"
 DEV_TIGHT_M = 0.6   # second dev metric: the dev instances scaled to m=0.6 (contended)
+
+# R4.6 visibility arms: CLI token -> env visibility_L (None = full instance).
+VISIBILITY_LEVELS = {"0": 0.0, "8": 8.0, "40": 40.0, "full": None}
 
 
 # --------------------------------------------------------------------------- #
@@ -281,17 +295,19 @@ def _batch_value(policy, obs_list, device):
     return value.cpu().numpy()
 
 
-def eval_dev(policy, dev_instances, device, feature_drop=None):
+def eval_dev(policy, dev_instances, device, feature_drop=None, env_kwargs=None):
     """Mean WWT (validator) of the greedy policy over the dev set.
 
     ``feature_drop`` must match the training env so the policy sees the same
     (ablated) observation distribution at eval; the reward_mode is irrelevant
-    here (WWT is scored by the validator, not the reward).
+    here (WWT is scored by the validator, not the reward).  ``env_kwargs`` (the
+    R4.6 visibility settings) must match for the same reason -- an env built at a
+    different L would hand a 13-column policy a 10-column context.
     """
     policy.eval()
     wwts = []
     for inst in dev_instances:
-        env = DispatchEnv(inst, feature_drop=feature_drop)
+        env = DispatchEnv(inst, feature_drop=feature_drop, **(env_kwargs or {}))
         obs = env.reset()
         done = False
         while not done:
@@ -305,24 +321,36 @@ def eval_dev(policy, dev_instances, device, feature_drop=None):
 # --------------------------------------------------------------------------- #
 # PPO                                                                         #
 # --------------------------------------------------------------------------- #
-def _make_policy(arch):
+def _make_policy(arch, f_ctx=F_CTX):
     """Instantiate the scorer for ``arch`` ('mlp' default, 'attn' upgrade).
 
-    Both classes expose the SAME interface (forward/act/evaluate/save/load and
-    the k_cand/f_job/f_ctx attributes the PPO loop reads), so nothing else in
-    the loop changes."""
+    ``f_ctx`` is the env's EFFECTIVE context width (10, or 13 with the R4.6
+    lookahead columns), so the checkpoint records the width it was trained at and
+    loads back into the right shape.  Both classes expose the SAME interface
+    (forward/act/evaluate/save/load and the k_cand/f_job/f_ctx attributes the PPO
+    loop reads), so nothing else in the loop changes."""
     if arch == "attn":
         from .policy_attn import AttnDispatchPolicy
-        return AttnDispatchPolicy()
-    return DispatchPolicy()
+        return AttnDispatchPolicy(f_ctx=f_ctx)
+    return DispatchPolicy(f_ctx=f_ctx)
 
 
 def train(seed, updates, out_dir, smoke=False, device=None,
-          reward_mode="shaped", feature_drop=None, curriculum="v1", arch="mlp"):
+          reward_mode="shaped", feature_drop=None, curriculum="v1", arch="mlp",
+          visibility=None):
     if curriculum not in ("v1", "v2"):
         raise ValueError("curriculum must be 'v1' or 'v2', got %r" % (curriculum,))
     if arch not in ("mlp", "attn"):
         raise ValueError("arch must be 'mlp' or 'attn', got %r" % (arch,))
+    if visibility is not None and visibility not in VISIBILITY_LEVELS:
+        raise ValueError("visibility must be None or one of %r, got %r"
+                         % (sorted(VISIBILITY_LEVELS), visibility))
+    # R4.6: the flag being ABSENT is not the same as --visibility 0. Absent means
+    # the pre-R4 env (F_CTX=10, no known-order bookkeeping) and a bit-identical
+    # run; '0' means the widened-architecture control arm at zero visibility.
+    env_kwargs = ({} if visibility is None
+                  else {"visibility_L": VISIBILITY_LEVELS[visibility],
+                        "lookahead_features": True})
     campuses = [5, 9, 10, 12]
     if smoke:
         n_envs, steps_per_env, sizes = 2, 64, [50]
@@ -349,7 +377,15 @@ def train(seed, updates, out_dir, smoke=False, device=None,
     # Second dev metric (both curricula): the same dev instances at m=0.6 capacity.
     dev_set_tight = [tightness.scale_crew(inst, DEV_TIGHT_M) for inst in dev_set]
 
-    policy = _make_policy(arch).to(device)
+    # Env slots first: the policy's context width comes from the env's effective
+    # f_ctx (10, or 13 under --visibility), never from a module constant.
+    envs = [DispatchEnv(sampler.sample(), reward_mode=reward_mode,
+                        feature_drop=feature_drop, **env_kwargs)
+            for _ in range(n_envs)]
+    cur_obs = [e.reset() for e in envs]
+    ep_return = [0.0 for _ in range(n_envs)]
+
+    policy = _make_policy(arch, f_ctx=envs[0].f_ctx).to(device)
     optim = torch.optim.Adam(policy.parameters(), lr=lr)
 
     config = {
@@ -365,6 +401,10 @@ def train(seed, updates, out_dir, smoke=False, device=None,
         "curriculum": curriculum, "dev_tight_m": DEV_TIGHT_M,
         "curriculum_knobs": _curriculum_knobs(curriculum),
         "arch": arch,
+        "visibility": visibility,
+        "visibility_L": env_kwargs.get("visibility_L", 0.0),
+        "lookahead_features": bool(env_kwargs.get("lookahead_features", False)),
+        "f_ctx": policy.f_ctx,
     }
     with open(os.path.join(out_dir, "config.json"), "w") as fh:
         json.dump(config, fh, indent=2)
@@ -374,19 +414,14 @@ def train(seed, updates, out_dir, smoke=False, device=None,
         fh.write("update,mean_train_return,dev_wwt_mean,dev_wwt_tight,"
                  "entropy,value_loss,seconds\n")
 
-    # Env slots.
-    envs = [DispatchEnv(sampler.sample(), reward_mode=reward_mode,
-                        feature_drop=feature_drop) for _ in range(n_envs)]
-    cur_obs = [e.reset() for e in envs]
-    ep_return = [0.0 for _ in range(n_envs)]
-
     # Checkpoint-selection metric: curriculum v2 targets contended regimes, so
     # its best.pt is chosen by the TIGHT dev metric (the default-capacity dev
     # plateaus at ~410 for any non-idling policy and cannot discriminate --
     # see docs/decision_log.md 2026-07-05 "v2 checkpoint selection").
     best_dev = float("inf")
-    last_dev = eval_dev(policy, dev_set, device, feature_drop)  # baseline: every row finite
-    last_dev_tight = eval_dev(policy, dev_set_tight, device, feature_drop)
+    last_dev = eval_dev(policy, dev_set, device, feature_drop,
+                        env_kwargs)                    # baseline: every row finite
+    last_dev_tight = eval_dev(policy, dev_set_tight, device, feature_drop, env_kwargs)
     sel = last_dev_tight if curriculum == "v2" else last_dev
     if sel < best_dev:
         best_dev = sel
@@ -436,7 +471,7 @@ def train(seed, updates, out_dir, smoke=False, device=None,
                     completed_returns.append(ep_return[i])
                     ep_return[i] = 0.0
                     envs[i] = DispatchEnv(sampler.sample(), reward_mode=reward_mode,
-                                          feature_drop=feature_drop)
+                                          feature_drop=feature_drop, **env_kwargs)
                     cur_obs[i] = envs[i].reset()
                 else:
                     cur_obs[i] = nobs
@@ -499,8 +534,9 @@ def train(seed, updates, out_dir, smoke=False, device=None,
 
         is_last = (update == updates - 1)
         if (update % eval_every == 0) or is_last:
-            last_dev = eval_dev(policy, dev_set, device, feature_drop)
-            last_dev_tight = eval_dev(policy, dev_set_tight, device, feature_drop)
+            last_dev = eval_dev(policy, dev_set, device, feature_drop, env_kwargs)
+            last_dev_tight = eval_dev(policy, dev_set_tight, device, feature_drop,
+                                      env_kwargs)
             sel = last_dev_tight if curriculum == "v2" else last_dev
             if sel < best_dev:
                 best_dev = sel
@@ -522,11 +558,19 @@ def train(seed, updates, out_dir, smoke=False, device=None,
     return {"best_dev_wwt": best_dev, "out_dir": out_dir}
 
 
+def visibility_out_dir(visibility, seed):
+    """Default output directory of an R4.6 visibility arm (spec §S1)."""
+    return os.path.join(_ROOT, "results", "p3_train",
+                        "vis%s" % visibility, "seed%03d" % int(seed))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="PPO trainer for the FM dispatch policy")
     ap.add_argument("--seed", type=int, default=301)
     ap.add_argument("--updates", type=int, default=300)
-    ap.add_argument("--out", type=str, required=True)
+    ap.add_argument("--out", type=str, default=None,
+                    help="output directory (required unless --visibility is "
+                         "given, which supplies the R4.6 default path)")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--device", type=str, default=None)
     ap.add_argument("--reward", type=str, default="shaped",
@@ -541,12 +585,25 @@ def main(argv=None):
     ap.add_argument("--arch", type=str, default="mlp", choices=["mlp", "attn"],
                     help="scorer architecture (default 'mlp' = DispatchPolicy, "
                          "unchanged; 'attn' = AttnDispatchPolicy, Appendix B)")
+    ap.add_argument("--visibility", type=str, default=None,
+                    choices=sorted(VISIBILITY_LEVELS),
+                    help="R4.6 preventive-visibility level L in business hours "
+                         "('full' = the whole instance is known from bh 0); "
+                         "switches the lookahead context features on for every "
+                         "arm, the L=0 arm included.  Omit for pre-R4 behaviour.")
     args = ap.parse_args(argv)
     n_updates = 3 if args.smoke else args.updates
     feature_drop = None if args.feature_drop == "none" else args.feature_drop
-    train(args.seed, n_updates, args.out, smoke=args.smoke, device=args.device,
+    out_dir = args.out
+    if out_dir is None:
+        if args.visibility is None:
+            ap.error("--out is required (or pass --visibility for the R4.6 "
+                     "default results/p3_train/vis<L>/seed<NNN>/)")
+        out_dir = visibility_out_dir(args.visibility, args.seed)
+    train(args.seed, n_updates, out_dir, smoke=args.smoke, device=args.device,
           reward_mode=args.reward, feature_drop=feature_drop,
-          curriculum=args.curriculum, arch=args.arch)
+          curriculum=args.curriculum, arch=args.arch,
+          visibility=args.visibility)
 
 
 if __name__ == "__main__":

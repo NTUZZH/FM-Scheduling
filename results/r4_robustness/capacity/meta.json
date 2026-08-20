@@ -1,0 +1,70 @@
+{
+  "experiment": "r4_capacity",
+  "protocol": "R4.8",
+  "generated": "2026-08-19T18:59:18",
+  "start_time": "2026-08-19T18:59:00",
+  "elapsed_seconds": 17.564,
+  "smoke": false,
+  "base_set": "Eval-B replay",
+  "base_instances": 227,
+  "q_grid": [
+    0.75,
+    0.9,
+    0.95
+  ],
+  "q_baseline": 0.95,
+  "q_suffix": {
+    "0.75": "_q75",
+    "0.9": "_q90",
+    "0.95": "_q95"
+  },
+  "crew_hours_per_week": 40.0,
+  "capacity_cache_dir": "./results/r4_robustness/capacity/calib",
+  "total_crew_per_q": {
+    "0.75": 410,
+    "0.9": 560,
+    "0.95": 687
+  },
+  "q95_provenance_check": {
+    "instances_matching_q95_table": 227,
+    "instances_differing": 0,
+    "examples": []
+  },
+  "crew_multiplier_grid": [
+    0.5,
+    0.6,
+    0.8,
+    1.0,
+    1.25
+  ],
+  "realized_multiplier_source": "results/r4_final/calib/capacity.csv (v1.1)",
+  "rules": [
+    "edd",
+    "pfifo",
+    "wspt",
+    "atc",
+    "wmdd",
+    "lpt",
+    "random"
+  ],
+  "dispatch_seed": 301,
+  "policy_pool": [
+    "v2rl301",
+    "v2rl302",
+    "v2rl303",
+    "v2rl304",
+    "v2rl305",
+    "v2rl306",
+    "v2rl307",
+    "v2rl308",
+    "v2rl309",
+    "v2rl310"
+  ],
+  "policy_dir": "./results/p3_train/v2",
+  "workers": 12,
+  "n_configs": 454,
+  "n_rows": 7718,
+  "n_errors": 0,
+  "n_infeasible": 0,
+  "git_describe": "paper-v4-25-gbe054c7f-dirty"
+}

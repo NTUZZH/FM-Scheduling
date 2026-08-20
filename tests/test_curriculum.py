@@ -180,7 +180,7 @@ def test_smoke_train_v2(failures):
            "--seed", "998", "--out", out_dir, "--device", "cpu"]
     env = dict(os.environ)
     env["PYTHONPATH"] = os.path.join(_ROOT, "src") + os.pathsep + env.get("PYTHONPATH", "")
-    # Be a polite neighbour to the running abl/dyneval sessions: single-threaded.
+    # Be a polite neighbour to concurrently running evaluations: single-threaded.
     env["OMP_NUM_THREADS"] = "1"
     env["MKL_NUM_THREADS"] = "1"
     proc = subprocess.run(cmd, cwd=_ROOT, env=env, capture_output=True,

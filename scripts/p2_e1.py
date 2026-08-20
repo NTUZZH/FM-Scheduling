@@ -3,16 +3,16 @@
 on ALL test-split instances (replay AND generator tracks).
 
 For each instance in data/processed/instances/index.csv with split=='test' we run
-nine methods and validate every schedule with the independent referee
+ten methods and validate every schedule with the independent referee
 (``fmwos.validator``), then write one row per (instance, method):
 
-    PDRs      : edd, wspt, atc, pfifo, mor, random   (seed 301)
+    PDRs      : edd, wspt, atc, pfifo, lpt, wmdd, random   (seed 301)
     metaheur. : ga                                    (seed 301, 60 s wall budget)
     exact     : cpsat60, cpsat300                     (workers 2)
 
 CP-SAT protocol optimisation
 ----------------------------
-1. Run the six PDRs; pick the best *feasible* PDR schedule (min validator WWT).
+1. Run the seven PDRs; pick the best *feasible* PDR schedule (min validator WWT).
 2. Run cpsat60 (workers 2) **warm-started from that best PDR schedule**.
 3. If cpsat60 proves OPTIMAL, cpsat300 is recorded as a *copy* of the cpsat60
    row (status OPTIMAL, identical numbers, wall_seconds == cpsat60's) with the
@@ -28,12 +28,12 @@ continues and the (feasible=0) row is still written.
 Parallelism / restart-safety (shards design)
 --------------------------------------------
 A multiprocessing Pool runs over INSTANCES (default 10 workers, ``--workers``).
-One task == one instance x all nine methods run sequentially; GA and CP-SAT are
+One task == one instance x all ten methods run sequentially; GA and CP-SAT are
 single-threaded inside a task except CP-SAT's own ``workers=2``.  Each finished
 instance is written atomically to its own shard results/e1_static/shards/<id>.json
-(a shard holds all nine method rows).  This needs no lock and is fully restart
+(a shard holds all ten method rows).  This needs no lock and is fully restart
 safe: on start we scan the shards and skip any instance whose shard already holds
-all nine methods.  ``--merge`` (also auto-run at the end) concatenates the shards
+all ten methods.  ``--merge`` (also auto-run at the end) concatenates the shards
 into results/e1_static/results.csv and rebuilds errors.log.
 
 Usage
@@ -84,8 +84,8 @@ OUT_CSV = OUT_DIR / "results.csv"
 META_JSON = OUT_DIR / "meta.json"
 ERR_LOG = OUT_DIR / "errors.log"
 
-PDR_RULES = ["edd", "wspt", "atc", "pfifo", "mor", "random"]
-ALL_METHODS = PDR_RULES + ["ga", "cpsat60", "cpsat300"]  # nine methods, fixed order
+PDR_RULES = ["edd", "wspt", "atc", "pfifo", "lpt", "wmdd", "random"]
+ALL_METHODS = PDR_RULES + ["ga", "cpsat60", "cpsat300"]  # ten methods, fixed order
 _METHOD_ORDER = {m: i for i, m in enumerate(ALL_METHODS)}
 
 SEED = 301
@@ -199,10 +199,10 @@ def _write_shard(iid, shard):
 
 
 # --------------------------------------------------------------------------- #
-# One instance x all nine methods (runs in a worker process)
+# One instance x all ten methods (runs in a worker process)
 # --------------------------------------------------------------------------- #
 def _run_one(row):
-    """Process one instance under all nine methods; write its shard.
+    """Process one instance under all ten methods; write its shard.
 
     Returns a small picklable summary dict for the parent (progress + logging).
     Infeasible schedules are recorded (feasible=0) and reported, not raised.
@@ -293,7 +293,7 @@ def _run_one(row):
 # Resumability
 # --------------------------------------------------------------------------- #
 def _finished_ids():
-    """Ids whose shard already holds all nine methods."""
+    """Ids whose shard already holds all ten methods."""
     done = set()
     if not SHARD_DIR.exists():
         return done

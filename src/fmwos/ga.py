@@ -42,7 +42,7 @@ WWT of the decoded schedule, computed inline with the exact validator definition
 
 Evolutionary loop
 -----------------
-* Init: the 5 PDR schedules (edd, wspt, atc, pfifo, mor) converted to
+* Init: the 5 PDR schedules (edd, wspt, atc, pfifo, lpt) converted to
   permutations (jobs ordered by start_bh, tie-break wo id), padded to ``pop``
   with random permutations from the seeded RNG.
 * Tournament selection (size 3, with replacement).
@@ -80,7 +80,10 @@ from . import pdrs
 _INF = float("inf")
 
 # PDR rules used to seed the initial population (order fixed for reproducibility).
-_SEED_RULES = ("edd", "wspt", "atc", "pfifo", "mor")
+# FROZEN per protocol R4: the seed set is the v1.0 one ("mor" only renamed to
+# "lpt"); wmdd and the tuned-k ATC variants are deliberately NOT added, so the GA
+# comparator stays the method that produced the released results.
+_SEED_RULES = ("edd", "wspt", "atc", "pfifo", "lpt")
 
 _ELITES = 2          # elitism: best-N carried unchanged into the next generation
 _TOURNAMENT = 3      # tournament selection size
