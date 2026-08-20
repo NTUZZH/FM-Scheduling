@@ -476,7 +476,7 @@ def vis_table():
         "methods. A negative effect means advance knowledge lowered weighted "
         "tardiness. $L=$ full releases the whole instance's preventive work to "
         "the planner at time zero; a known order still cannot start before its "
-        "own release. The rule and the optimiser are single artifacts run at "
+        "own release. The rule and the optimiser are single artefacts run at "
         "each level, so their contrast is the information alone; the policy "
         "arms are retrained at each level, so their contrast carries the "
         "retraining as well. The pool row is the five-seed mean per "
