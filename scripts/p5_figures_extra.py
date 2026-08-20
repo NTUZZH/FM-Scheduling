@@ -514,9 +514,15 @@ def fig10_rolling():
     recs = json.load(open(f"{ROOT}/results/p4_dyneval/rolling_diag.json"))
     by = {(r["short"], r["variant"]): r for r in recs}
 
-    fig = plt.figure(figsize=figsize(180, 58))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.62, 1.0], left=0.055,
-                          right=0.975, top=0.85, bottom=0.17, wspace=0.24)
+    # Print-true design: 164.5 mm = \textwidth, so every pt below is a pt on
+    # the page. Series colours: arrival-only = dark grey (a pathology variant
+    # of the same rolling method, not a method of its own), periodic =
+    # ROLL_TEAL (the shipped Rolling CP-SAT hue everywhere in the paper).
+    # All text is black; series identity is carried by marks and position.
+    AO_COL = INK2
+    fig = plt.figure(figsize=figsize(164.5, 55))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.62, 1.0], left=0.06,
+                          right=0.975, top=0.84, bottom=0.19, wspace=0.26)
     axA = fig.add_subplot(gs[0, 0])
     axB = fig.add_subplot(gs[0, 1])
 
@@ -525,8 +531,8 @@ def fig10_rolling():
     ao = by[("0102", "arrival-only")]
     pe = by[("0102", "periodic")]
     horizon = max(ao["makespan"], pe["makespan"]) * 1.02
-    lanes = [(1, ao, "arrival-only trigger", CMAP["lpt"]),
-             (0, pe, "periodic + arrival", INK)]
+    lanes = [(1, ao, "arrival-only trigger", AO_COL),
+             (0, pe, "periodic + arrival", ROLL_TEAL)]
     for y, rec, name, col in lanes:
         t = sorted(rec["replan_times_bh"])
         # longest no-replan span (last tick -> makespan)
@@ -535,51 +541,52 @@ def fig10_rolling():
         gi = int(np.argmax(gaps))
         if y == 1:  # shade the stale span in the arrival-only lane only
             axA.add_patch(Rectangle((ext[gi], y - 0.28), gaps[gi], 0.56,
-                          facecolor=CMAP["lpt"], alpha=0.14, edgecolor="none",
+                          facecolor=AO_COL, alpha=0.13, edgecolor="none",
                           zorder=1))
             axA.text((ext[gi] + ext[gi + 1]) / 2, y + 0.32,
                      "stale plan executes uncorrected",
-                     ha="center", va="bottom", fontsize=5.9, color=CMAP["lpt"],
+                     ha="center", va="bottom", fontsize=6.4, color=INK,
                      style="italic")
         axA.hlines(y, 0, rec["makespan"], color=AXIS, lw=0.6, zorder=2)
         for tv in t:
-            axA.vlines(tv, y - 0.17, y + 0.17, color=col, lw=0.7, zorder=4)
+            axA.vlines(tv, y - 0.17, y + 0.17, color=col, lw=0.8, zorder=4)
         axA.plot(rec["makespan"], y, marker="|", color=col, markersize=7,
-                 markeredgewidth=1.1, zorder=5)
+                 markeredgewidth=1.2, zorder=5)
         wwt_txt = format(int(round(rec["wwt"])), ",")
         # place the label so its white box sits fully clear of the shaded
-        # stale-span rectangle's right edge (the pink ends at the makespan).
+        # stale-span rectangle's right edge (the shade ends at the makespan).
         axA.text(horizon * 0.95, y, f"TWT {wwt_txt}",
                  ha="right", va="center", fontsize=7.0, weight="bold",
-                 color=col, zorder=6,
+                 color=INK, zorder=6,
                  bbox=dict(boxstyle="round,pad=0.16", fc=SURF, ec="none"))
         axA.text(-horizon * 0.012, y, name, ha="right", va="center",
-                 fontsize=6.3, color=col)
-    axA.set_xlim(-horizon * 0.16, horizon)
+                 fontsize=6.6, color=INK)
+    axA.set_xlim(-horizon * 0.175, horizon)
     axA.set_ylim(-0.7, 1.7)
     axA.set_yticks([])
     for sp in ("left",):
         axA.spines[sp].set_visible(False)
-    axA.set_xlabel("business hours", fontsize=6.9)
+    axA.set_xlabel("business hours", fontsize=7.0)
     axA.set_xticks([0, 100, 200, 300])
-    axA.tick_params(axis="x", labelsize=6.2)
+    axA.tick_params(axis="x", labelsize=6.6)
     axA.text(0, 1.62, "campus 9 · size 400 · m=0.6 · id 0102",
-             fontsize=6.0, color=INK2, ha="left", va="center")
-    axA.set_title("(a)  Replan timeline", loc="left", fontsize=7.4, color=INK,
-                  weight="bold", pad=6, x=-0.16)
+             fontsize=6.4, color=INK, ha="left", va="center")
+    axA.set_title("(a)  Replan timeline", loc="left", fontsize=7.6, color=INK,
+                  weight="bold", pad=6, x=-0.175)
 
     # ---- (b) outcome slope chart (arrival-only -> periodic), log-y ----------
     style_ax(axB)
     order = ["0102", "0105", "0107"]
     xa, xp = 0.0, 1.0
     FLOOR = 6.0
-    # Hand-tuned label placement: the two crossing slope lines, the near-coincident
-    # periodic dots (402 vs 268) and the two near-equal EDD references force
-    # mutually-clear, per-instance positions (all verified collision-free).
-    IDLAB = {"0102": (0.16, "left"),    # nudged right of the plunging id-0105 line
-             "0105": (0.0, "center"), "0107": (0.0, "center")}
-    PVAL = {"0102": (0.72, 468.0),      # up-left into the line wedge
-            "0107": (0.80, 175.0),      # down-left, clear of the id-0107 line
+    # Hand-tuned label placement for the v1.1 values (AO 3,560/6,167/458 ->
+    # P 402/10/268): the crossing slope lines, the near-coincident periodic
+    # dots (402 vs 268) and their EDD references force mutually-clear,
+    # per-instance positions (verified collision-free on the render).
+    IDLAB = {"0102": (0.30, "left", 2000.0),  # riding just above its own slope line
+             "0105": (0.0, "center", None), "0107": (0.0, "center", None)}
+    PVAL = {"0102": (0.72, 500.0),      # up-left into the line wedge
+            "0107": (0.80, 165.0),      # down-left, clear of the id-0107 line
             "0105": (xp - 0.17, None)}
     EDDVA = {"0102": "bottom", "0107": "top"}  # split the 402/268 EDD notes apart
     for i, sid in enumerate(order):
@@ -587,7 +594,7 @@ def fig10_rolling():
         p = by[(sid, "periodic")]
         ya, yp, ye = a["wwt"], p["wwt"], a["edd_wwt"]
         axB.plot([xa, xp], [ya, yp], "-", color=MUTE, lw=1.0, zorder=2)
-        axB.plot(xa, ya, "o", color=CMAP["lpt"], markersize=5.0,
+        axB.plot(xa, ya, "o", color=AO_COL, markersize=5.0,
                  markeredgecolor=SURF, markeredgewidth=0.7, zorder=5)
         axB.plot(xp, yp, "o", color=ROLL_TEAL, markersize=5.0,
                  markeredgecolor=SURF, markeredgewidth=0.7, zorder=5)
@@ -599,33 +606,34 @@ def fig10_rolling():
         if ye > 1e-9:
             axB.plot([xp - 0.14, xp + 0.14], [ye, ye], ls=(0, (2, 1.5)),
                      color=INK2, lw=0.9, zorder=4)
-            axB.text(xp + 0.19, ye, "EDD", fontsize=5.5, color=INK2,
+            axB.text(xp + 0.19, ye, "EDD", fontsize=6.2, color=INK,
                      va=EDDVA.get(sid, "center"), ha="left")
         else:  # EDD == 0: clip to the log floor, annotate honestly
             axB.plot([xp - 0.14, xp + 0.14], [FLOOR, FLOOR], ls=(0, (2, 1.5)),
                      color=INK2, lw=0.9, zorder=4)
-            axB.text(xp + 0.19, FLOOR, "EDD 0\n(log floor)", fontsize=5.2,
-                     color=INK2, va="center", ha="left", linespacing=0.9)
-        # arrival-only value (left of the red dot)
-        axB.text(xa - 0.07, ya, fmt_wwt(ya), fontsize=5.9, color=CMAP["lpt"],
-                 ha="right", va="center", weight="bold")
-        # periodic value (teal): hand-placed left of the EDD tick, clear of the
+            axB.text(xp + 0.19, FLOOR, "EDD 0\n(log floor)", fontsize=6.2,
+                     color=INK, va="center", ha="left", linespacing=0.9)
+        # arrival-only value (left of the grey dot; full digits, matching
+        # panel (a) and the caption macros)
+        axB.text(xa - 0.07, ya, format(int(round(ya)), ","), fontsize=6.5,
+                 color=INK, ha="right", va="center", weight="bold")
+        # periodic value: hand-placed left of the EDD tick, clear of the
         # crossing lines and of the neighbouring periodic label
         pvx, pvy = PVAL[sid]
-        axB.text(pvx, yp if pvy is None else pvy, fmt_wwt(yp), fontsize=5.9,
-                 color=ROLL_TEAL, ha="right", va="center", weight="bold")
-        # instance tag near the arrival-only dot
-        idx, idha = IDLAB[sid]
-        axB.text(idx, ya * 1.52, f"id {sid}", fontsize=5.6, color=INK2,
-                 ha=idha, va="bottom")
+        axB.text(pvx, yp if pvy is None else pvy, fmt_wwt(yp), fontsize=6.5,
+                 color=INK, ha="right", va="center", weight="bold")
+        # instance tag near the arrival-only dot (or riding its slope line)
+        idx, idha, idy = IDLAB[sid]
+        axB.text(idx, ya * 1.52 if idy is None else idy, f"id {sid}",
+                 fontsize=6.2, color=INK, ha=idha, va="bottom")
     axB.set_yscale("log")
     axB.set_ylim(FLOOR * 0.8, 20000)
     axB.set_xlim(-0.5, 1.6)
     axB.set_xticks([xa, xp])
-    axB.set_xticklabels(["arrival\nonly", "periodic"], fontsize=6.2)
-    axB.set_ylabel("episode TWT  (log)", fontsize=6.9)
+    axB.set_xticklabels(["arrival\nonly", "periodic"], fontsize=6.6)
+    axB.set_ylabel("episode TWT  (log)", fontsize=7.0)
     axB.grid(axis="y", which="major", color=GRID, linewidth=0.4)
-    axB.set_title("(b)  Outcome", loc="left", fontsize=7.4, color=INK,
+    axB.set_title("(b)  Outcome", loc="left", fontsize=7.6, color=INK,
                   weight="bold", pad=6)
     save(fig, "f10_rolling")
 
