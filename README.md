@@ -6,8 +6,6 @@ Learning"* (under peer review).
 
 Preprint (earlier version) can be accessed here: http://dx.doi.org/10.2139/ssrn.7095162
 
-Preprint can be accessed here: http://dx.doi.org/10.2139/ssrn.7095162
-
 It contains, for reuse and verification:
 
 - **Benchmark instances** (`data/instances.tar.zst`): 3,186 real-data replay
