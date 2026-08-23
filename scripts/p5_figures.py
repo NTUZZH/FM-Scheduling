@@ -456,7 +456,8 @@ def fig2_static():
     for m in order_b:
         axB.scatter(lat[m], gaps[m], s=42, color=suite_color(m), edgecolor=SURF,
                     linewidth=0.9, zorder=4)
-    # The six dispatching rules answer inside one factor of two in latency, so
+    # The six rule dots this panel draws (seven rules, with pFIFO sharing EDD's
+    # dot) answer inside one factor of two in latency, so
     # their labels cannot all sit at their own marker height: WMDD and ATC are
     # 0.13 decades apart and would overprint. Each label therefore keeps its own
     # x (just right of its dot) and takes the least-displaced height that leaves

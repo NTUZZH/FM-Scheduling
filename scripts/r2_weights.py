@@ -2,7 +2,10 @@
 """R2 / A4 -- priority-weight-vector sweep (robustness check: sweep the
 objective weight vector w=(8,4,2,1)).
 
-We re-simulate the SIX dispatching rules on the E5 base set under three tardiness
+We re-simulate the six dispatching rules that existed when this development
+check was run (edd, wspt, atc, pfifo, lpt, random; wmdd was added later and is
+therefore absent here, which is why the paper reports seven rules and this
+diagnostic covers six) on the E5 base set under three tardiness
 weight vectors mapped by priority class (P1,P2,P3,P4):
 
     baseline  (8, 4, 2, 1)   -- the paper's weights (SLA-tier doubling)

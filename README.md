@@ -24,7 +24,14 @@ It contains, for reuse and verification:
   development evaluations, the frozen final evaluation (`results/r4_final/`),
   the robustness suites (`results/r4_robustness/`), the preventive-visibility
   study (`results/r4_visibility/`), and the diagnostic re-simulations
-  (travel, weight-vector, candidate-cap sweeps).
+  (travel, weight-vector, candidate-cap sweeps). The travel and
+  weight-vector diagnostics ran on the development corpus and therefore
+  cover six of the seven rules; WMDD was added afterwards.
+- **The sensitivity analyses around the primary comparison**
+  (`results/r4_final/analysis/`): the equivalence-margin sweep, the
+  window-overlap audit with its re-clustered and size-stratified
+  re-analysis, and the two-level bootstrap that adds training-seed
+  resampling to the instance resampling.
 - **The pre-specified evaluation protocol** (`docs/protocol.md`): the two
   decision gates, their pass/fail criteria, and the dated amendment history.
 
@@ -57,6 +64,14 @@ PYTHONPATH=src python scripts/p4_analysis.py    # Gate-B tables
 PYTHONPATH=src python scripts/r4_final_instances.py && \
     PYTHONPATH=src python scripts/r4_final_eval.py && \
     PYTHONPATH=src python scripts/r4_analysis.py
+# the paper's primary analysis (ten method families against a reference fixed
+# a priori at EDD) and the sensitivity analyses around it; r4_analysis.py must
+# have run first, since these read results/r4_final/analysis/pools.csv:
+PYTHONPATH=src python scripts/r4_family_analysis.py && \
+    PYTHONPATH=src python scripts/r4_scarcity.py && \
+    PYTHONPATH=src python scripts/r4_margin_sweep.py && \
+    PYTHONPATH=src python scripts/r4_overlap.py && \
+    PYTHONPATH=src python scripts/r4_seedboot.py
 python scripts/p5_figures.py && \
     python scripts/p5_figures_extra.py && \
     PYTHONPATH=src python scripts/r4_figures.py  # paper figures

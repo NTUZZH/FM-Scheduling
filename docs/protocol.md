@@ -101,7 +101,10 @@ where their schedules coincide.
 **R4.4 Final evaluation (Eval-B).** A fresh, untouched final test set is
 created before any method sees it: new empirical-track anchors drawn with
 shuffle seed 401 whose windows do not overlap any released v1.0 instance
-window (target 30 per campus-size cell at sizes 150 and 400, test period;
+window (amended before any Eval-B evaluation existed to the same-size-class
+rule; see "R4 adjustments" below, and R4.11 for what the amended rule leaves
+overlapping and how it is handled in the analysis)
+(target 30 per campus-size cell at sizes 150 and 400, test period;
 cells that cannot supply 10 non-overlapping windows are dropped and
 disclosed), plus fixed-window generator cells at target utilization
 {0.7, 0.9, 1.0, 1.1, 1.3} from the training campuses with fresh seeds
@@ -195,3 +198,48 @@ emergency-focus (P1/P2 windows halved, P3/P4 unchanged) and routine
 tightening (P3/P4 halved, P1/P2 unchanged); and one preventive-priority
 convention variant (all preventive orders mapped to P3 instead of P4).
 These are scenario robustness checks, not claims about true contracts.
+
+**R4.11 Post-hoc sensitivity analyses (added 2026-08-23, AFTER the final
+results existed).** Three checks were added during revision. They are
+sensitivity analyses, not pre-specified reporting: R4.5 remains the primary
+analysis, and no verdict in the manuscript is taken from R4.11. Each is
+reported in full in the Supplementary Material and reproduced by
+`scripts/r4_overlap.py` and `scripts/r4_seedboot.py`.
+
+(1) *Window overlap and the resampling cluster.* The same-size-class
+acceptance rule of the R4 adjustment leaves windows of different size
+classes on one campus free to cover the same stretch of time. Measured on
+the instance files: 41 instance pairs of the final empirical set share at
+least one work order, all cross-size, all on campuses 10 and 12; 81 of 227
+instances touch another; 49,050 work-order slots cover 43,023 distinct work
+orders. The primary comparison is re-run with the connected components of
+the sharing relation as the resampling cluster (186 components over 227
+instances; 139 over the 180 verdict-campus instances). No verdict changes in
+any of the 60 scope-by-family cells, and the widest confidence interval
+grows by 2.9 per cent.
+
+(2) *Size-stratified re-analysis.* Within one size class no two windows
+share a work order, so the primary comparison is also re-run separately for
+the 150-order and 400-order instances. At the reference crew multiplier all
+ten families are equivalent to EDD in both strata. The strata do not cover
+the same campuses (400-order cells exist only on campuses 10 and 12), so a
+difference between them confounds instance size with campus.
+
+(3) *Training-seed uncertainty.* The primary intervals for the three policy
+pools are conditional on the fixed set of trained seeds, because each pool
+is collapsed to a per-configuration seed mean before the bootstrap. A
+two-level bootstrap resamples training seeds and instance clusters jointly,
+10,000 replicates. The empirical crew-multiplier verdicts are unchanged;
+on the generator track the intervals widen by a median factor of 2.7 and
+nine of the 33 cells move off a definite verdict, eight of them from worse
+to inconclusive. With ten seeds (three for the curriculum-v1 pool) the seed
+level is resampled from a small set, so the widened interval is a lower
+bound on seed uncertainty rather than a precise estimate of it.
+
+Also disclosed with (1): no work order of the final evaluation appears in
+any window a policy trained on (0 of 227 instances share with a train-split
+v1.0 window), so there is no training leakage; but 101 of 227 share work
+orders with a test-split v1.0 window of a different size class, which the
+development evaluation scored. The final evaluation is therefore fresh in
+its windows and in its construction, not in the underlying work-order
+population.

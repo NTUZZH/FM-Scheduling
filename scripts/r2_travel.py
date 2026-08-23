@@ -2,7 +2,10 @@
 """R2 / A3 -- travel-overhead re-simulation (E5 robustness check: charge
 0.25 bh per building switch for the dispatching policies).
 
-We re-simulate the SIX dispatching rules (edd, wspt, atc, pfifo, lpt, random) on
+We re-simulate the six dispatching rules that existed when this development
+check was run (edd, wspt, atc, pfifo, lpt, random; wmdd was added later and is
+therefore absent here, which is why the paper reports seven rules and this
+diagnostic covers six) on
 the E5 sensitivity base set under an event simulator that charges an extra travel
 overhead whenever a technician STARTS an order whose building differs from the
 building of that technician's PREVIOUS order.
@@ -364,8 +367,8 @@ def analyse(rows):
     L.append("")
     L.append("Per-cell tau on the mean-TWT-per-method vectors. '-' = degenerate "
              "cell: the baseline ranking is fully tied (capacity-adequate campus 5 "
-             "runs at TWT < 8 with all six rules ~equal), so there is no ordering "
-             "for travel to preserve or break.")
+             "runs at TWT < 8 with all six rules of this diagnostic ~equal), so "
+             "there is no ordering for travel to preserve or break.")
     L.append("")
     L.append("| overhead | " + " | ".join("c%d/%d" % (c, s) for c, s in cells)
              + " | mean cell |")

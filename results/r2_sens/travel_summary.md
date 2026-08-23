@@ -15,7 +15,7 @@ Buildings exist on campuses 5 and 10 (~99.9%% covered). Campuses 9 and 12 have N
 
 ## Ranking robustness (Kendall tau-b, no-travel vs travel)
 
-Per-cell tau on the mean-TWT-per-method vectors. '-' = degenerate cell: the baseline ranking is fully tied (capacity-adequate campus 5 runs at TWT < 8 with all six rules ~equal), so there is no ordering for travel to preserve or break.
+Per-cell tau on the mean-TWT-per-method vectors. '-' = degenerate cell: the baseline ranking is fully tied (capacity-adequate campus 5 runs at TWT < 8 with all six rules of this diagnostic ~equal), so there is no ordering for travel to preserve or break.
 
 | overhead | c5/150 | c5/400 | c9/150 | c9/400 | c10/150 | c10/400 | c12/150 | c12/400 | mean cell |
 |---|---|---|---|---|---|---|---|---|---|

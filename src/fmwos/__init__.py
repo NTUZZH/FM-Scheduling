@@ -1,4 +1,4 @@
-"""fmwos — FM work-order scheduling benchmark (Paper Y).
+"""fmwos — FM work-order scheduling benchmark.
 
 All code in this package is written fresh for this project.
 """

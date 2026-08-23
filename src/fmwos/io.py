@@ -1,7 +1,7 @@
 """FMUCD loading and cleaning.
 
 Source: Facility Management Unified Classification Database (FMUCD),
-Mendeley Data DOI 10.17632/cb8d2nsjss.1 (CC BY-NC 4.0). ~3.7M work orders,
+Mendeley Data DOI 10.17632/cb8d2nsjss.1 (CC BY 4.0). ~3.7M work orders,
 12 North-American universities, 2002-2021, 38 fields.
 
 Cleaning rules (paper appendix table; every rule is deterministic and lives

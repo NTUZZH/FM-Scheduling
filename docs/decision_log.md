@@ -255,3 +255,48 @@ row equal to its fallback made no progress and is contention-immune.
 - Improved share 6.1% of rollcp2 rows, consistent with the manuscript's
   limited-gain-at-2-s framing. VERDICT: no contamination signal; the 2 s
   wall-clock rows stand.
+
+## 2026-08-23 — Post-hoc sensitivity analyses around the primary comparison (protocol R4.11)
+
+Three checks added after the final results existed, reported as sensitivity
+analyses; R4.5 remains the primary reporting and no manuscript verdict is
+taken from these.
+
+- **Window overlap** (`scripts/r4_overlap.py`). The same-size-class anchor
+  rule adopted in the dated R4 adjustment leaves windows of different size
+  classes on one campus free to cover the same period. Measured on the
+  instance files: 41 sharing pairs, all cross-size, all on campuses 10 and
+  12; 81 of 227 final empirical instances touch another; 49,050 slots over
+  43,023 distinct work orders. Re-running the primary comparison with the
+  connected components of the sharing relation as the cluster (186
+  components over 227 instances; 139 over the 180 verdict-campus
+  instances) changes 0 of 60 verdicts, widest interval +2.9%. The base arm
+  of that script reproduces the released `family_comparisons.csv` on all
+  360 field comparisons, which is what licenses reading the component arm
+  as a like-for-like contrast.
+- **Size stratification** (same script). Within one size class no two
+  windows share a work order. At m=1.0 all ten families are equivalent to
+  EDD in both strata; at m=0.6 the 150-order stratum is 6/4/0
+  (equivalent/inconclusive/worse) and the 400-order stratum 4/3/3, the
+  worse ones WSPT, LPT and random. Confounded with campus (400-order cells
+  exist only on campuses 10 and 12) and with cluster count (60 against
+  120); the 400-order margin is ~4.5x larger, so the faster narrowing is
+  not a stricter-margin artefact.
+- **Training-seed uncertainty** (`scripts/r4_seedboot.py`). The released
+  pool intervals are conditional on the fixed trained-seed set, because
+  each pool is collapsed to a per-configuration seed mean before the
+  bootstrap. A two-level bootstrap resampling seeds and clusters jointly
+  (10,000 replicates) leaves all 9 empirical crew-multiplier verdicts
+  unchanged (median width ratio 1.21) and widens the generator intervals by
+  a median factor of 3.93; 9 of 33 cells move off a definite verdict, 8 of
+  them worse to inconclusive. Point estimates match the released
+  `mean_diff` to 9e-13 and the instance-only arm reproduces the released
+  bounds on the released stream, so the change is the seed level and not
+  the estimator. With K=10 (K=3 for the curriculum-v1 pool) the widened
+  interval is a lower bound on seed uncertainty.
+- **Freshness of Eval-B against the released corpus** (same overlap
+  script). 0 of 227 final empirical instances share a work order with a
+  train-split v1.0 window, so no training leakage; 101 of 227 share with a
+  test-split v1.0 window of a different size class, which the development
+  evaluation scored. Fresh in its windows and its construction, not in the
+  underlying work-order population.
