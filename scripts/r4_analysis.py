@@ -1036,8 +1036,52 @@ def f_text(x) -> str:
     return str(x)
 
 
+HOUSE_SEP = "{,}"
+HOUSE_MINUS = "$-$"
+
+
+def house_number(value) -> str:
+    """One number style for every macro this project generates.
+
+    Two rules, applied after the per-quantity formatter has chosen the number
+    of decimals.  A negative sign is typeset as a math-mode minus, because an
+    ASCII hyphen in text mode is a hyphen-length dash rather than a minus.  An
+    integer part of more than three digits is grouped in thousands, including
+    the integer part of a value that also carries decimals.  Applying this in
+    one place is what keeps a count, a mean, a paired difference, a percentage
+    and a ratio looking alike across the generated macro files.
+
+    A value that does not parse as a number (a verdict word, a method name, a
+    membership sentence) is returned unchanged, and the function is idempotent:
+    running it on its own output, or on a value that already carries either
+    piece of the convention, changes nothing.
+    """
+    s = str(value)
+    plain = s.replace(HOUSE_SEP, "").replace(HOUSE_MINUS, "-")
+    try:
+        float(plain)
+    except ValueError:
+        return s
+    negative = plain.startswith("-")
+    head, dot, tail = (plain[1:] if negative else plain).partition(".")
+    if head.isdigit() and len(head) > 3:
+        groups = []
+        while len(head) > 3:
+            groups.insert(0, head[-3:])
+            head = head[:-3]
+        groups.insert(0, head)
+        head = HOUSE_SEP.join(groups)
+    out = head + dot + tail
+    return (HOUSE_MINUS + out) if negative else out
+
+
 class MacroFile:
-    """Collects macro definitions, each with the CSV field it was read from."""
+    """Collects macro definitions, each with the CSV field it was read from.
+
+    Values pass through :func:`house_number` on the way in, so the number style
+    is a property of the generated file rather than of each call site; the
+    subclasses in the companion scripts inherit it through ``super().add``.
+    """
 
     def __init__(self, existing_names):
         self.existing = set(existing_names)
@@ -1056,7 +1100,7 @@ class MacroFile:
             raise SystemExit("macro %r already exists in paper/macros.tex" % name)
         if name in self.names:
             raise SystemExit("macro %r defined twice in this run" % name)
-        v = str(value)
+        v = house_number(value)
         if v.strip() == "" or "nan" in v.lower() or "inf" in v.lower():
             raise SystemExit("macro %r has a non-finite value %r" % (name, v))
         self.names.add(name)

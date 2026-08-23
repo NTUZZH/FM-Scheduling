@@ -2,7 +2,7 @@
 """
 R4 figure wave: the four exhibits the R4 revision adds or redesigns.
 
-  f4_map        decision map (centrepiece redesign)
+  f4_map        decision map: the scarcity grid and the capacity ladder
   fvis_effects  preventive-visibility effects, small multiples
   f3_curves     utilisation curves on the generator track
   f6_robustness robustness stability matrix (replaces f6_sensitivity)
@@ -131,167 +131,69 @@ def style_ax(ax):
     return ax
 
 
-# ---------------------------------------------------------------------------
-# Method taxonomy (names only; every number still comes from the CSVs)
-# ---------------------------------------------------------------------------
-DUEDATE = ["edd", "pfifo"]
-WEIGHTED = ["wmdd", "atc"]
-PROCESSING = ["wspt", "lpt"]
-RANDOM = ["random"]
-RULES = DUEDATE + WEIGHTED + PROCESSING + RANDOM
-NICE = {"edd": "EDD", "pfifo": "pFIFO", "wmdd": "WMDD", "atc": "ATC",
-        "wspt": "WSPT", "lpt": "LPT", "random": "Random"}
-
-
-def method_family(m):
-    if m in DUEDATE:
-        return "duedate"
-    if m in WEIGHTED:
-        return "weighted"
-    if m in PROCESSING:
-        return "processing"
-    if m in RANDOM:
-        return "random"
-    return "policy"
-
-
-def plural(n, word):
-    """`3 policy seeds`, `1 policy seed`."""
-    return f"{n} {word}" + ("" if n == 1 else "s")
-
-
-NUMWORD = ("no", "one", "two", "three", "four", "five", "six", "seven",
-           "eight", "nine", "ten")
-
-
-def spell(n):
-    """Small counts are spelled out where the figure writes a sentence."""
-    return NUMWORD[n] if 0 <= n <= 10 else f"{n:,}"
-
-
-def composition(members):
-    """What the equivalence set is made of, in one short phrase."""
-    members = list(members)
-    rules_in = [m for m in RULES if m in members]
-    rules_out = [m for m in RULES if m not in members]
-    n_pol = sum(1 for m in members if method_family(m) == "policy")
-    if len(rules_in) == len(RULES):
-        base = "every rule"
-    elif rules_in and len(rules_out) <= 2:
-        base = "every rule except " + " and ".join(NICE[m] for m in rules_out)
-    elif rules_in:
-        base = ", ".join(NICE[m] for m in rules_in)
-    else:
-        return plural(n_pol, "policy seed") + " only"
-    if n_pol:
-        base += " + " + plural(n_pol, "policy seed")
-    return base
-
-
-# Simplicity order for the headline rule: due-date rules first, then the
-# weighted due-date rules, then WSPT, then the remaining rules.  The second
-# entry of each pair is the fill key the headline takes.
-SIMPLICITY = [(DUEDATE, "duedate"), (WEIGHTED, "weighted"),
-              (["wspt"], "neutral"), (["lpt"], "neutral"), (RANDOM, "neutral")]
-
-
-def cell_headline(members, dist, verdict):
-    """Which method a scope's cell names.
-
-    The rule: a cell names the simplest rule that is inside the scope's strict
-    practical-equivalence set.  When the set holds no rule, the cell still
-    names the closest rule that is not shown to be worse, because a set member
-    picked with hindsight is not something a manager can deploy and an
-    inconclusive gap is not a defeat.  Only a scope in which every rule is
-    worse than the scope best is headlined by the learned policy.
-
-    `members` is the set membership, `dist` maps method to its percentage
-    distance from the scope best, `verdict` maps method to its paired verdict.
-    Returns (label, fill key, status, closest rule), with status one of
-    'in_set', 'closest', 'policy'.
-    """
-    members = list(members)
-    in_rules = [m for m in RULES if m in members]
-    if len(in_rules) == len(RULES):
-        return "Any rule", "neutral", "in_set", None
-    for fam, key in SIMPLICITY:
-        got = [m for m in fam if m in members]
-        if got:
-            got.sort(key=lambda m: (round(dist.get(m, np.inf), 6), fam.index(m)))
-            return NICE[got[0]], key, "in_set", None
-    live = [m for m in RULES if m in dist and verdict.get(m) != "worse"]
-    if not live:
-        return "Learned policy", "policy", "policy", None
-    closest = min(live, key=lambda m: (round(dist[m], 6), RULES.index(m)))
-    key = next(k for fam, k in SIMPLICITY if closest in fam)
-    return NICE[closest], key, "closest", closest
-
-
-def legacy_headline(members):
-    """The mechanical rule this figure used before the R4 revision, kept only
-    so the script can print which cells the headline rule moved."""
-    in_rules = [m for m in RULES if m in members]
-    if len(in_rules) == len(RULES):
-        return "Any rule"
-    for fam in (DUEDATE, WEIGHTED, PROCESSING):
-        got = [m for m in fam if m in members]
-        if got:
-            if fam is DUEDATE and "edd" in got:
-                return "EDD"
-            return NICE[got[0]]
-    return "Learned policy"
-
-
-# ---------------------------------------------------------------------------
-# Data access helpers
-# ---------------------------------------------------------------------------
-def eq_scope(eq, scope_type, scope):
-    d = eq[(eq.scope_type == scope_type) & (eq.scope == scope)]
-    if d.empty:
-        return None
-    members = list(d.loc[d.in_equivalence_set == 1, "method"])
-    dist = dict(zip(d.method, d.pct_from_best))
-    verdict = dict(zip(d.method, d.verdict))
-    return dict(members=members, dist=dist, verdict=verdict,
-                n_configs=int(d.n_configs.iloc[0]),
-                n_clusters=int(d.n_clusters.iloc[0]),
-                n_methods=int(len(d)),
-                best=d.best_method.iloc[0],
-                mean_best=float(d.mean_best.iloc[0]))
-
-
-def fmt_pct(v, digits=1):
-    s = f"{abs(v):.{digits}f}"
-    return ("−" if v < 0 else "+") + s + "%"
-
-
-def fmt_num(v):
-    """Thousands separator, sensible decimals."""
-    if abs(v) >= 1000:
-        return f"{v:,.0f}"
-    if abs(v) >= 100:
-        return f"{v:.1f}"
-    return f"{v:.2f}"
-
 # ===========================================================================
-# F4  decision map
+# F4  decision map: what moves the rule-family boundary, and what does not
 # ===========================================================================
-UBINS = ["<0.5", "0.5-0.8", "0.8-1.0", "1.0-1.2", ">=1.2"]
-# Every column head names the variable, so a reader who meets one column on its
-# own still knows what the number is.
-UBIN_LABEL = {"<0.5": "u < 0.5", "0.5-0.8": "0.5 ≤ u < 0.8",
-              "0.8-1.0": "0.8 ≤ u < 1.0", "1.0-1.2": "1.0 ≤ u < 1.2",
-              ">=1.2": "u ≥ 1.2"}
-# generator target utilisations falling in each realised-utilisation bin
-GEN_IN_BIN = {"<0.5": [], "0.5-0.8": ["0.7"], "0.8-1.0": ["0.9"],
-              "1.0-1.2": ["1.0", "1.1"], ">=1.2": ["1.3"]}
-# visibility generator cells, by the bin their target utilisation falls in
-VIS_IN_BIN = {"<0.5": None, "0.5-0.8": 0.7, "0.8-1.0": 0.9,
-              "1.0-1.2": 1.1, ">=1.2": None}
-VIS_ROWS = ["8", "40", "full"]
-# the L = 0 rows carry more text than the notice rows, so they are taller
-ROW_H = {"emp": 1.32, "gen": 1.32, "8": 1.20, "40": 1.20, "full": 1.20}
-ROW_ORDER = ["emp", "gen", "8", "40", "full"]        # top to bottom
+# Panel (a) is the direct scarcity grid of scripts/r4_scarcity.py: realised
+# utilisation on x, the share of workload sitting in overloaded trades on y,
+# and one mechanically derived family label per cell.  Panel (b) is the
+# capacity ladder of scripts/r4_family_analysis.py on the chronically
+# overloaded campus, where the weighted rules separate from EDD as the crews
+# are cut.  Every quantity is read from those CSVs and formatted here.
+GRID_SCOPE = "no_campus2"        # verdict-eligible cells: campus 2 held out
+GRID_REF_SCOPE = "all"           # the same grid with campus 2 put back in
+UBINS = ["<0.5", "0.5-0.8", "0.8-1.0", "1.0-1.2", ">=1.2"]   # x, left to right
+OVBANDS = ["<0.25", "0.25-0.5", "0.5-0.75", ">=0.75"]        # y, bottom to top
+
+# One meaning per colour, held across both panels: blue is the due-date
+# family, amber the weighted-urgency family, pale grey a cell where the two
+# are interchangeable.  Every cell also writes its label, so the map reads
+# without colour and in greyscale.
+CELL_FILL = {"either": "#e3e6e9", "due-date": FILL["duedate"],
+             "weighted": FILL["weighted"], "insufficient": "#ffffff"}
+CELL_WORD = {"either": "Either", "due-date": "Due-date",
+             "weighted": "Weighted", "insufficient": "Too few"}
+FAM_LINE = {"duedate": LINE["duedate"], "weighted": LINE["weighted"]}
+
+# Panel (b): the two weighted-urgency rules, plus one due-date rule pinned at
+# the reference for contrast.  Order is top to bottom inside each rung.
+# (key in the CSV, printed name, family, marker).  The marker carries the
+# family as well as the colour does, so the panel survives greyscale.
+LADDER_RULES = [("wmdd", "WMDD", "weighted", "o"),
+                ("atc", "ATC", "weighted", "o"),
+                ("pfifo", "pFIFO", "duedate", "s")]
+
+# Type scale: three sizes, two weights, italic for the one aside.
+PT_SMALL, PT_BODY, PT_TAG = 6.2, 6.8, 8.0
+
+# Print-true geometry, in millimetres on the page (the figure is drawn at
+# \textwidth, so a millimetre here is a millimetre in the manuscript).
+H_MM = 84.0
+AX_BOT, AX_TOP = 29.0, 78.5          # both panels share this band
+A_X0, A_W = 18.0, 62.0               # panel (a) grid: 5 columns of 12.4 mm
+B_GUT, B_X0, B_W = 90.0, 96.5, 41.0  # panel (b) gutter, axes left, axes width
+B_NUM_X, B_VERD_X = 1.19, 1.22       # right-hand text column, in axes fractions
+HEAD_U, ROW_U, GAP_U = 1.0, 1.15, 0.45   # panel (b) row grid, in row units
+
+
+def _band_label(tok):
+    """`0.5-0.8` -> `0.5–0.8`, `>=1.2` -> `≥ 1.2`, `<0.5` -> `< 0.5`."""
+    if tok.startswith(">="):
+        return "≥ " + tok[2:]
+    if tok.startswith("<"):
+        return "< " + tok[1:]
+    return tok.replace("-", "–")
+
+
+def _signed(v):
+    """Thousands separator and a true minus sign."""
+    s = f"{abs(v):,.0f}"
+    return ("−" + s) if (v < 0 and s != "0") else s
+
+
+def _quantile_token(arm):
+    """Capacity arm `q0.95` -> the percentile it names, `p95`."""
+    return "p%d" % round(float(arm[1:]) * 100)
 
 
 def _wrap(txt, size, width_mm):
@@ -370,335 +272,327 @@ def _check_fit(fig, registry, tag):
     return bad
 
 
-def _l0_blocks(s, footer):
-    """Headline + subtext + footer for one L = 0 cell."""
-    lab, key, status, closest = cell_headline(s["members"], s["dist"],
-                                              s["verdict"])
-    n_pol = sum(1 for m in s["members"] if method_family(m) == "policy")
-    blocks = [(lab, 7.0, "bold", "normal")]
-    if status == "closest":
-        blocks.append(("no conclusive separation", 5.4, "normal", "normal"))
-        blocks.append((f"equivalence set: {plural(n_pol, 'policy seed')}; "
-                       f"{NICE[closest]} +{s['dist'][closest]:.2f}%, "
-                       f"{s['verdict'][closest]}", 5.4, "normal", "normal"))
-    elif status == "policy":
-        blocks.append(("every rule is worse", 5.4, "normal", "normal"))
-        blocks.append((f"equivalence set: {composition(s['members'])}",
-                       5.4, "normal", "normal"))
-    else:
-        blocks.append((composition(s["members"]), 5.4, "normal", "normal"))
-    blocks.append((footer, 5.4, "normal", "italic"))
-    return lab, key, blocks
+def _check_texts(fig, tag, min_pt=PT_SMALL):
+    """Type-size floor, canvas containment and text-on-text collisions.
 
-
-def _side_entry(ax, y, title, blocks, body, w_mm, unit_pt, reg):
-    """One side-panel entry: bold title, dashed amber box, body sentence.
-
-    Draws downward from `y` (axis units) and returns the y the next entry
-    starts from.  The box is sized from the height of its own text stack.
+    The cell gate `_check_fit` only sees matrix cells, so this second gate
+    walks every text the figure holds: nothing may print below the size floor,
+    nothing may run off the canvas, and no two labels may touch.
     """
-    lines = _wrap(title, 6.2, w_mm - 1.0)
-    h = len(lines) * 1.30 * 6.2 / unit_pt
-    t = ax.text(0.5, y, "\n".join(lines), ha="center", va="top", fontsize=6.2,
-                color=INK, weight="bold", linespacing=1.30)
-    reg.append((t, (0.0, y - h - 0.06, 1.0, h + 0.12), ax))
-    y -= h + 0.07
-
-    box_w_mm = w_mm - 1.5          # the box is inset, and its lines run wide
-    bh = (_stack_pt(blocks, box_w_mm) + 9.0) / unit_pt
-    _cell(ax, 0.02, y - bh, 0.96, bh, FILL["weighted"], blocks, box_w_mm,
-          dashed=True, registry=reg)
-    y -= bh + 0.11
-
-    lines = _wrap(body, 5.4, w_mm - 1.0)
-    hb = len(lines) * 1.45 * 5.4 / unit_pt
-    t = ax.text(0.5, y, "\n".join(lines), ha="center", va="top", fontsize=5.4,
-                color=INK, linespacing=1.45)
-    reg.append((t, (0.0, y - hb - 0.06, 1.0, hb + 0.12), ax))
-    return y - hb - 0.24
+    fig.canvas.draw()
+    rend = fig.canvas.get_renderer()
+    items = [t for t in fig.findobj(mpl.text.Text)
+             if t.get_visible() and t.get_text().strip()]
+    bad = []
+    for t in items:
+        if t.get_size() < min_pt - 1e-6:
+            bad.append(f"{t.get_text()[:28]!r} at {t.get_size()} pt")
+    W, H = fig.get_size_inches() * fig.dpi
+    boxes = []
+    for t in items:
+        bb = t.get_window_extent(rend)
+        if bb.x0 < -0.5 or bb.y0 < -0.5 or bb.x1 > W + 0.5 or bb.y1 > H + 0.5:
+            bad.append(f"{t.get_text()[:28]!r} runs off the canvas")
+        boxes.append((t, bb))
+    for i in range(len(boxes)):
+        ti, bi = boxes[i]
+        for j in range(i + 1, len(boxes)):
+            tj, bj = boxes[j]
+            ox = min(bi.x1, bj.x1) - max(bi.x0, bj.x0)
+            oy = min(bi.y1, bj.y1) - max(bi.y0, bj.y0)
+            if ox > 0.8 and oy > 0.8:
+                bad.append(f"{ti.get_text()[:20]!r} overlaps "
+                           f"{tj.get_text()[:20]!r}")
+    if bad:
+        print(f"   !! {tag}: {len(bad)} text defects")
+        for b in bad[:14]:
+            print("      ", b)
+    else:
+        print(f"   {tag}: {len(items)} texts, all ≥ {min_pt} pt, "
+              "inside the canvas, none overlapping")
+    return bad
 
 
 def fig4_map():
-    eq = pd.read_csv(ANA_FINAL / "equivalence.csv")
-    vis = pd.read_csv(ANA_VIS / "vis_effect.csv")
-    c2u = pd.read_csv(ANA_FINAL / "campus2_utilization.csv").set_index("statistic")["value"]
-    rob = pd.read_csv(ANA_ROB / "equivalence.csv")
-    rob_u = pd.read_csv(ANA_ROB / "capacity_utilization.csv")
-    rob_st = pd.read_csv(ANA_ROB / "stability.csv")
+    grid = pd.read_csv(ANA_FINAL / "scarcity_grid.csv")
+    fam = pd.read_csv(ANA_FINAL / "family_robust.csv")
+    caputil = pd.read_csv(ANA_ROB / "capacity_utilization.csv")
+    gmeta = json.loads((ANA_FINAL / "scarcity_meta.json").read_text())
+    min_cl = int(gmeta["min_clusters_grid"])   # cells below this get no verdict
 
-    # ---- row 1: empirical anchors, Eval-B, per realised-utilisation bin ----
-    emp = {b: eq_scope(eq, "emp_ubin", f"u_bin={b}") for b in UBINS}
-    # ---- row 2: generator cells, Eval-B, mapped into the same bins --------
-    gen = {}
-    for b in UBINS:
-        targets = GEN_IN_BIN[b]
-        parts = [eq_scope(eq, "gen_utarget", f"u_target={t}") for t in targets]
-        parts = [p for p in parts if p]
-        if not parts:
-            gen[b] = None
-            continue
-        members = set(parts[0]["members"])
-        for p in parts[1:]:
-            members &= set(p["members"])       # the set that holds in every cell
-        dist = {m: max(p["dist"].get(m, np.inf) for p in parts)
-                for m in parts[0]["dist"]}
-        verdict = {}
-        for m in parts[0]["verdict"]:
-            vs = [p["verdict"].get(m) for p in parts]
-            verdict[m] = ("worse" if all(v == "worse" for v in vs) else
-                          "equivalent" if all(v == "equivalent" for v in vs) else
-                          "inconclusive")
-        gen[b] = dict(members=sorted(members), dist=dist, verdict=verdict,
-                      n_configs=sum(p["n_configs"] for p in parts),
-                      n_methods=parts[0]["n_methods"], targets=targets)
+    # ---- panel (a): the verdict-eligible grid, and the same grid with the
+    # chronically overloaded campus put back in --------------------------------
+    gv = grid[grid.scope == GRID_SCOPE]
+    ga = grid[grid.scope == GRID_REF_SCOPE]
+    assert set(gv.u_bin) == set(UBINS) and set(gv.ov_band) == set(OVBANDS)
+    cellv = {(r.u_bin, r.ov_band): r for r in gv.itertuples()}
+    cella = {(r.u_bin, r.ov_band): r for r in ga.itertuples()}
+    n_weighted = sum(1 for r in cellv.values()
+                     if r.recommended_family == "weighted")
+    # cells that name the weighted family only because campus 2 is in them
+    campus2_only = [k for k, r in cella.items()
+                    if r.recommended_family == "weighted"
+                    and cellv.get(k) is not None
+                    and cellv[k].recommended_family != "weighted"]
 
-    def vis_eff(scope, arm, level):
-        r = vis[(vis.scope == scope) & (vis.arm == arm)
-                & (vis.level.astype(str) == level)]
-        return None if r.empty else r.iloc[0]
+    # ---- panel (b): the capacity ladder on the chronically overloaded campus -
+    cap = fam[(fam.check == "capacity") & (fam.stratum == "campus2")]
+    arms = sorted(set(cap.arm), key=lambda a: -float(a[1:]))   # loosest first
+    cu = caputil[caputil.stratum == "campus2"].set_index("arm")
+    lad, margin_pct, rung = {}, {}, {}
+    for a in arms:
+        sub = cap[cap.arm == a]
+        mean_edd = float(sub.mean_edd.iloc[0])
+        margin_pct[a] = 100.0 * float(sub.margin.iloc[0]) / mean_edd
+        rung[a] = dict(u_median=float(cu.loc[a, "u_median"]),
+                       n=int(sub.n_clusters.iloc[0]))
+        for key, _, _, _ in LADDER_RULES:
+            r = sub[sub.family == key].iloc[0]
+            lad[(a, key)] = dict(
+                diff=float(r.mean_diff), verdict=str(r.verdict),
+                lo_abs=float(r.ci_lo), hi_abs=float(r.ci_hi),
+                pct=100.0 * float(r.mean_diff) / mean_edd,
+                lo=100.0 * float(r.ci_lo) / mean_edd,
+                hi=100.0 * float(r.ci_hi) / mean_edd)
+    one_margin = max(margin_pct.values()) - min(margin_pct.values()) < 1e-6
 
-    # ---- the figure note, trimmed to what the caption does not carry --------
-    sub = eq[eq.scope_type == "emp_ubin"]
-    margin_pct = 100.0 * float(sub.margin.iloc[0] / sub.mean_best.iloc[0])
-    n_matrix = int(emp[UBINS[0]]["n_methods"])
-    n_cap = int(len(rob[(rob.check == "capacity") & (rob.arm == "q0.75")
-                        & (rob.stratum == "verdict")]))
-    n_vis_seeds = int(vis[vis.arm.str.startswith("visseed")].arm.nunique())
-    # The caption carries the cell-naming rule, the column definition and what
-    # the side panel is, so the note keeps only what the caption does not: how
-    # the set is defined, what the capacity check scores, how to read a notice
-    # cell, and what the notice levels are in plain terms.
-    note = ("A method is in a scope's practical-equivalence set when its paired "
-            f"difference from the scope best clears a margin of {margin_pct:.0f}% of the "
-            "best mean, floor one weighted unit, on a 95% cluster bootstrap over base "
-            "instances; only a scope in which every rule is worse would be headlined by "
-            "the learned policy. The undersized portfolio in the side panel is the "
-            f"capacity check, which scores {n_cap} methods rather than the {n_matrix} "
-            "of the matrix. "
-            "The notice rows report what advance notice does to each arm, as a paired "
-            "change against that same arm at L = 0; the policy pool there is the "
-            f"{spell(n_vis_seeds)} retrained visibility seeds, and the myopic rules "
-            "are unchanged by construction. Notice levels: 8 bh is one shift, 40 bh is "
-            "one week, full is the whole horizon.")
-    note_lines = textwrap.wrap(note, 165)
+    # ---- canvas -------------------------------------------------------------
+    W = TEXTWIDTH_MM
+    fig = plt.figure(figsize=figsize(W, H_MM))
 
-    # Height and margins are set so one matrix row unit keeps the same printed
-    # size whatever ROW_H or the note length holds: the top band (column
-    # headers) stays at 13.1 mm, the matrix at 111.6 mm, and the bottom band is
-    # the note plus the legend plus their fixed gaps.
-    TOP_MM, MATRIX_MM = 13.1, 111.6
-    NOTE_BOT_MM, NOTE_LINE_MM = 3.04, 5.4 * 1.5 / 72.0 * 25.4
-    LEG_GAP_MM, LEG_H_MM, LEG_TOP_GAP_MM = 3.6, 7.4, 1.1
-    note_h_mm = len(note_lines) * NOTE_LINE_MM
-    BOTTOM_MM = (NOTE_BOT_MM + note_h_mm + LEG_GAP_MM + LEG_H_MM
-                 + LEG_TOP_GAP_MM)
-    H_MM = TOP_MM + MATRIX_MM + BOTTOM_MM
-    fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, H_MM))
-    ML, MB, MW, MH = 0.145, BOTTOM_MM / H_MM, 0.690, MATRIX_MM / H_MM
-    YTOP = sum(ROW_H.values())
-    axm = fig.add_axes([ML, MB, MW, MH])
-    axm.set_xlim(0, 5); axm.set_ylim(0, YTOP); axm.axis("off")
-    axs = fig.add_axes([0.845, MB, 0.145, MH])
-    axs.set_xlim(0, 1); axs.set_ylim(0, YTOP); axs.axis("off")
-    cell_w_mm = MW * TEXTWIDTH_MM / 5.0
-    side_w_mm = 0.145 * TEXTWIDTH_MM - 0.5
-    unit_pt = MH * H_MM * MM * 72.0 / YTOP      # one row unit, in points
+    def frac(x, y, w, h):
+        return [x / W, y / H_MM, w / W, h / H_MM]
 
-    ROWY, _y = {}, 0.0
-    for k in reversed(ROW_ORDER):               # stack the rows from the bottom
-        ROWY[k] = _y
-        _y += ROW_H[k]
-    g_ = 0.045
-    reg = []
-    used = set()
+    axa = fig.add_axes(frac(A_X0, AX_BOT, A_W, AX_TOP - AX_BOT))
+    axb = fig.add_axes(frac(B_X0, AX_BOT, B_W, AX_TOP - AX_BOT))
 
-    reco_by_bin = {}
-    changed = []
-    for j, b in enumerate(UBINS):
-        # ---------------- row 1: empirical anchors ----------------
-        s = emp[b]
-        foot = f"set {len(s['members'])}/{s['n_methods']} · n {s['n_configs']}"
-        lab, key, blocks = _l0_blocks(s, foot)
-        used.add(key)
-        old = legacy_headline(s["members"])
-        if old != lab:
-            changed.append((f"empirical u {b}", old, lab))
-        _cell(axm, j + g_, ROWY["emp"] + g_, 1 - 2 * g_, ROW_H["emp"] - 2 * g_,
-              FILL[key], blocks, cell_w_mm, registry=reg)
-
-        # ---------------- row 2: generator cells ------------------
-        g = gen[b]
-        if g is None:
-            _cell(axm, j + g_, ROWY["gen"] + g_, 1 - 2 * g_,
-                  ROW_H["gen"] - 2 * g_, FILL["blank"],
-                  [("no generator cell", 5.4, "normal", "italic")],
-                  cell_w_mm, registry=reg)
-            reco_by_bin[b] = None
-        else:
-            foot = (f"set {len(g['members'])}/{g['n_methods']} · "
-                    f"u {'/'.join(g['targets'])}")
-            lab, key, blocks = _l0_blocks(g, foot)
-            used.add(key)
-            old = legacy_headline(g["members"])
-            if old != lab:
-                changed.append((f"generator u {b}", old, lab))
-            reco_by_bin[b] = (lab, key)
-            _cell(axm, j + g_, ROWY["gen"] + g_, 1 - 2 * g_,
-                  ROW_H["gen"] - 2 * g_, FILL[key], blocks, cell_w_mm,
-                  registry=reg)
-
-        # ---------------- rows 3-5: preventive visibility ---------
-        ut = VIS_IN_BIN[b]
-        for lv in VIS_ROWS:
-            yy = ROWY[lv]
-            if ut is None or reco_by_bin[b] is None:
-                _cell(axm, j + g_, yy + g_, 1 - 2 * g_, ROW_H[lv] - 2 * g_,
-                      FILL["blank"], [("not tested", 5.4, "normal", "italic")],
-                      cell_w_mm, registry=reg)
+    # =====================================================================
+    # Panel (a): the decision map
+    # =====================================================================
+    axa.set_xlim(0, len(UBINS)); axa.set_ylim(0, len(OVBANDS))
+    axa.set_facecolor(SURF)
+    for s in axa.spines.values():
+        s.set_visible(False)
+    cell_w_mm = A_W / len(UBINS)
+    cell_h = 1.0
+    pad = 0.032
+    reg, blanks = [], []
+    for i, ub in enumerate(UBINS):
+        for j, ob in enumerate(OVBANDS):
+            x, y = i + pad, j + pad
+            w, h = 1 - 2 * pad, cell_h - 2 * pad
+            r = cellv.get((ub, ob))
+            if r is None:
+                axa.add_patch(Rectangle((x, y), w, h, facecolor=SURF,
+                                        edgecolor=AXIS, linewidth=0.5,
+                                        linestyle=(0, (1.0, 1.6)), zorder=2))
+                blanks.append((i, j))
                 continue
-            lab, key = reco_by_bin[b]
-            pool = vis_eff(f"gen|u={ut:g}", "vispool", lv)
-            rule = vis_eff(f"gen|u={ut:g}", "atc_la", lv)
-            blocks = [(lab, 7.0, "bold", "normal"),
-                      (f"policy pool {fmt_pct(pool.pct_of_control)}", 5.4,
-                       "normal", "normal"),
-                      (f"forecast rule {fmt_pct(rule.pct_of_control)}", 5.4,
-                       "normal", "normal")]
-            hatch = False
-            if ut == 1.1:
-                win = vis_eff("gen|pm=0.2|u=1.1", "vispool", lv)
-                los = vis_eff("gen|pm=0.8|u=1.1", "vispool", lv)
-                hatch = (win.verdict == "better") or (los.verdict == "worse")
-                blocks.append((f"preventive share 0.2 "
-                               f"{fmt_pct(win.pct_of_control)} {win.verdict}",
-                               5.4, "normal", "italic"))
-                blocks.append((f"preventive share 0.8 "
-                               f"{fmt_pct(los.pct_of_control)} {los.verdict}",
-                               5.4, "normal", "italic"))
-            _cell(axm, j + g_, yy + g_, 1 - 2 * g_, ROW_H[lv] - 2 * g_,
-                  FILL[key], blocks, cell_w_mm, hatch=hatch, registry=reg)
+            key = r.recommended_family
+            blocks = [(CELL_WORD[key], PT_BODY, "bold", "normal"),
+                      (f"n = {int(r.n_clusters)}", PT_SMALL, "normal",
+                       "normal")]
+            _cell(axa, x, y, w, h, CELL_FILL[key], blocks, cell_w_mm - 0.8,
+                  hatch=(key == "insufficient"), registry=reg)
+            if (ub, ob) in campus2_only:
+                axa.add_patch(Rectangle((x, y), w, h, facecolor="none",
+                                        edgecolor=FAM_LINE["weighted"],
+                                        linewidth=1.0,
+                                        linestyle=(0, (2, 1.4)), zorder=6))
 
-    # ---- column headers and row labels ------------------------------------
-    for j, b in enumerate(UBINS):
-        axm.text(j + 0.5, YTOP + 0.07, UBIN_LABEL[b], ha="center", va="bottom",
-                 fontsize=7.0, color=INK, weight="bold")
-    axm.text(2.5, YTOP + 0.36, "Realised utilisation of the crews", ha="center",
-             va="bottom", fontsize=7.0, color=INK)
-    rowlab = [("emp", "empirical"), ("gen", "generator"),
-              ("8", "8 bh"), ("40", "40 bh"), ("full", "full")]
-    for key, lab in rowlab:
-        axm.text(-0.06, ROWY[key] + ROW_H[key] / 2, lab, ha="right", va="center",
-                 fontsize=7.0, color=INK)
-    ysplit = ROWY["gen"]
-    axm.text(-0.80, (ysplit + YTOP) / 2, "L = 0", ha="center", va="center",
-             rotation=90, fontsize=7.0, color=INK)
-    axm.text(-0.80, ysplit / 2, "notice L", ha="center", va="center",
-             rotation=90, fontsize=7.0, color=INK)
-    axm.plot([-0.66, -0.66], [ysplit + 0.03, YTOP - 0.03], color=INK, lw=0.7,
-             clip_on=False)
-    axm.plot([-0.66, -0.66], [0.03, ysplit - 0.03], color=INK, lw=0.7,
-             clip_on=False)
-    axm.plot([0, 5], [ysplit, ysplit], color=INK, lw=0.9, clip_on=False)
+    # The empty band is annotated so it does not read as unfinished, and the
+    # sentence it carries is the panel's finding.
+    runs = []
+    for j in range(len(OVBANDS)):
+        run = []
+        for i in range(len(UBINS)):
+            if (i, j) in blanks:
+                run.append(i)
+            elif run:
+                runs.append((j, run)); run = []
+        if run:
+            runs.append((j, run))
+    j, run = max(runs, key=lambda t: (len(t[1]), -t[0]))
+    assert len(run) >= 2, runs
+    note_a = ("No cell recommends the weighted family" if n_weighted == 0 else
+              f"{n_weighted} of {len(cellv)} cells recommend the weighted "
+              "family")
+    t = axa.text(min(run) + len(run) / 2, j + 0.5,
+                 "\n".join(_wrap(note_a, PT_SMALL, len(run) * cell_w_mm - 1.0)),
+                 ha="center", va="center", fontsize=PT_SMALL, color=INK,
+                 style="italic", linespacing=1.35, zorder=7)
+    reg.append((t, (min(run) + pad, j + pad, len(run) - 2 * pad,
+                    cell_h - 2 * pad), axa))
 
-    # ---- side panel: the two sustained-overload cases ----------------------
-    # (a) the portfolio sized at the p75 of weekly trade hours, from R4.8
-    q75 = rob[(rob.check == "capacity") & (rob.arm == "q0.75")
-              & (rob.stratum == "verdict")]
-    q75m = list(q75.loc[q75.in_equivalence_set == 1, "method"])
-    q75d = dict(zip(q75.method, q75.pct_from_best))
-    q75v = dict(zip(q75.method, q75.verdict))
-    q75_pol = sum(1 for m in q75m if method_family(m) == "policy")
-    q75_lab, q75_key, _, _ = cell_headline(q75m, q75d, q75v)
-    q75_rules = sorted((m for m in RULES if m in q75m), key=lambda m: q75d[m])
-    u75 = rob_u[(rob_u.arm == "q0.75") & (rob_u.stratum == "verdict")].iloc[0]
-    n_q75 = int(rob_st[(rob_st.check == "capacity") & (rob_st.arm == "q0.75")
-                       & (rob_st.stratum == "verdict")].set_size.iloc[0])
-    assert n_q75 == len(q75m), (n_q75, q75m)
-    used.add(q75_key)
+    axa.set_xticks([i + 0.5 for i in range(len(UBINS))])
+    axa.set_xticklabels([_band_label(b) for b in UBINS], fontsize=PT_BODY)
+    axa.set_yticks([j + 0.5 for j in range(len(OVBANDS))])
+    axa.set_yticklabels([_band_label(b) for b in OVBANDS], fontsize=PT_BODY)
+    axa.tick_params(length=0, pad=2.0, labelcolor=INK)
 
-    # (b) campus 2, held out of every verdict scope
-    st = eq_scope(eq, "stress", "campus=2|m=1.0")
-    st_lab, st_key, _, _ = cell_headline(st["members"], st["dist"],
-                                         st["verdict"])
-    used.add(st_key)
+    # =====================================================================
+    # Panel (b): the depth ladder on the chronically overloaded campus
+    # =====================================================================
+    total_u = len(arms) * (HEAD_U + len(LADDER_RULES) * ROW_U) + \
+        (len(arms) - 1) * GAP_U
+    axb.set_ylim(0, total_u)
+    axb.set_facecolor(SURF)
+    ypos, heads, cur = {}, [], 0.0
+    for a in arms:
+        heads.append((total_u - cur - HEAD_U * 0.52, a))
+        cur += HEAD_U
+        for key, _, _, _ in LADDER_RULES:
+            ypos[(a, key)] = total_u - cur - ROW_U / 2
+            cur += ROW_U
+        cur += GAP_U
 
-    axs.text(0.5, YTOP + 0.07, "Sustained\noverload", ha="center", va="bottom",
-             fontsize=7.0, color=INK, weight="bold", linespacing=1.25)
-    y = YTOP - 0.02
-    y = _side_entry(
-        axs, y, "Chronically undersized portfolio",
-        [(q75_lab, 7.0, "bold", "normal")]
-        + [(f"{NICE[m]} +{q75d[m]:.1f}%", 5.4, "normal", "normal")
-           for m in q75_rules]
-        + [(f"+ {plural(q75_pol, 'policy seed')}", 5.4, "normal", "normal"),
-         (f"EDD +{q75d['edd']:.1f}%, {q75v['edd']}", 5.4, "normal", "normal"),
-         (f"set {n_q75}/{len(q75)} · n {int(q75.n_configs.iloc[0])}",
-          5.4, "normal", "italic")],
-        f"Crews sized at the p75 of weekly trade hours: mean realised "
-        f"utilisation {u75.u_mean:.2f}, and "
-        f"{u75.share_u_over_one * 100:.0f}% of weeks at or above u = 1.",
-        side_w_mm, unit_pt, reg)
-    y = _side_entry(
-        axs, y, "Campus 2 (chronic overload, held out)",
-        [(st_lab, 7.0, "bold", "normal"),
-         (f"ATC +{st['dist']['atc']:.1f}%", 5.4, "normal", "normal"),
-         (f"EDD +{st['dist']['edd']:.1f}%, {st['verdict']['edd']}",
-          5.4, "normal", "normal"),
-         (f"set {len(st['members'])}/{st['n_methods']} · n {st['n_configs']}",
-          5.4, "normal", "italic")],
-        f"Held out of every verdict scope: median realised utilisation "
-        f"{c2u['u_median']:.2f}, maximum {c2u['u_max']:.2f}, "
-        f"{c2u['share_over_one'] * 100:.0f}% of weeks above 1.",
-        side_w_mm, unit_pt, reg)
+    lo_min = min(v["lo"] for v in lad.values())
+    hi_max = max(v["hi"] for v in lad.values())
+    span = hi_max - lo_min
+    axb.set_xlim(lo_min - 0.06 * span, hi_max + 0.05 * span)
 
-    # ---- legend ------------------------------------------------------------
-    handles = [
-        Patch(facecolor=FILL["duedate"], edgecolor=INK, linewidth=0.4,
-              label="due-date rule (EDD)"),
-        Patch(facecolor=FILL["weighted"], edgecolor=INK, linewidth=0.4,
-              label="weighted urgency rules (ATC, WMDD)"),
-    ]
-    if "policy" in used:
-        handles.append(Patch(facecolor=FILL["policy"], edgecolor=INK,
-                             linewidth=0.4, label="learned policy"))
-    if "neutral" in used:
-        handles.append(Patch(facecolor=FILL["neutral"], edgecolor=INK,
-                             linewidth=0.4, label="other rule"))
-    handles += [
+    # The margin band IS the zero reference: it is centred on EDD and, at this
+    # scale, about a millimetre wide, which is the honest picture of how small
+    # the practical-equivalence margin is beside the differences below.
+    MARGIN_GREY = "#d0d2d5"
+    if one_margin:
+        axb.axvspan(-margin_pct[arms[0]], margin_pct[arms[0]],
+                    facecolor=MARGIN_GREY, edgecolor="none", zorder=1)
+    else:
+        for a in arms:
+            ys = [ypos[(a, k)] for k, _, _, _ in LADDER_RULES]
+            axb.add_patch(Rectangle((-margin_pct[a], min(ys) - ROW_U / 2),
+                                    2 * margin_pct[a],
+                                    max(ys) - min(ys) + ROW_U,
+                                    facecolor=MARGIN_GREY, edgecolor="none",
+                                    zorder=1))
+
+    for a in arms:
+        for key, _, famkey, mk in LADDER_RULES:
+            d = lad[(a, key)]
+            y = ypos[(a, key)]
+            col = FAM_LINE[famkey]
+            axb.errorbar([d["pct"]], [y],
+                         xerr=[[d["pct"] - d["lo"]], [d["hi"] - d["pct"]]],
+                         fmt=mk, ms=3.0, mfc=col, mec=col, ecolor=col,
+                         elinewidth=0.9, capsize=1.4, capthick=0.9, zorder=4)
+    ytr = axb.get_yaxis_transform()
+    for y, a in heads:
+        axb.text(-(B_X0 - B_GUT) / B_W, y,
+                 f"{_quantile_token(a)} crews · median u = "
+                 f"{rung[a]['u_median']:.2f}",
+                 transform=ytr, ha="left", va="center", fontsize=PT_BODY,
+                 weight="bold", color=INK, clip_on=False)
+    for a in arms:
+        for key, nice, _, _ in LADDER_RULES:
+            d = lad[(a, key)]
+            y = ypos[(a, key)]
+            axb.text(B_NUM_X, y, _signed(d["diff"]), transform=ytr, ha="right",
+                     va="center", fontsize=PT_SMALL, color=INK, clip_on=False)
+            axb.text(B_VERD_X, y, d["verdict"], transform=ytr, ha="left",
+                     va="center", fontsize=PT_SMALL, color=INK, clip_on=False)
+
+    axb.set_yticks([ypos[(a, k)] for a in arms for k, _, _, _ in LADDER_RULES])
+    axb.set_yticklabels([n for _ in arms for _, n, _, _ in LADDER_RULES],
+                        fontsize=PT_BODY)
+    axb.tick_params(axis="y", length=0, pad=2.0, labelcolor=INK)
+    axb.tick_params(axis="x", length=2.2, width=0.5, color=MUTE,
+                    labelsize=PT_BODY, labelcolor=INK, pad=2.0)
+    axb.xaxis.set_major_locator(mticker.MultipleLocator(20))
+    axb.xaxis.set_major_formatter(
+        mticker.FuncFormatter(lambda v, _: f"{v:.0f}".replace("-", "−")))
+    for s in ("top", "right", "left"):
+        axb.spines[s].set_visible(False)
+    axb.spines["bottom"].set_color(AXIS)
+    axb.spines["bottom"].set_linewidth(0.5)
+
+    # ---- axis labels, panel tags -------------------------------------------
+    fig.text((A_X0 + A_W / 2) / W, (AX_BOT - 8.2) / H_MM,
+             "Realised utilisation of the crews, u", ha="center", va="bottom",
+             fontsize=PT_BODY, color=INK)
+    fig.text((A_X0 - 13.4) / W, (AX_BOT + AX_TOP) / 2 / H_MM,
+             "Share of workload in overloaded trades", ha="center",
+             va="center", rotation=90, fontsize=PT_BODY, color=INK)
+    fig.text((B_X0 + B_W / 2) / W, (AX_BOT - 8.2) / H_MM,
+             "Difference from EDD (% of the EDD mean; negative = better)",
+             ha="center",
+             va="bottom", fontsize=PT_BODY, color=INK)
+    fig.text(A_X0 / W, (AX_TOP + 1.6) / H_MM, "(a)", ha="left", va="bottom",
+             fontsize=PT_TAG, weight="bold", color=INK)
+    fig.text(B_GUT / W, (AX_TOP + 1.6) / H_MM, "(b)", ha="left", va="bottom",
+             fontsize=PT_TAG, weight="bold", color=INK)
+
+    # ---- legend: every fill and every mark, mapped -------------------------
+    fills = [
+        Patch(facecolor=CELL_FILL["either"], edgecolor=INK, linewidth=0.4,
+              label="Either family"),
+        Patch(facecolor=CELL_FILL["due-date"], edgecolor=INK, linewidth=0.4,
+              label="Due-date family"),
         Patch(facecolor="#ffffff", edgecolor=HATCH_INK, linewidth=0.4,
-              hatch="//", label="notice moves an arm's own result"),
-        Patch(facecolor="#ffffff", edgecolor=INK, linewidth=0.9,
-              linestyle=(0, (2, 1.4)),
-              label="sustained overload, outside the matrix scopes"),
+              hatch="//", label="Too few instances"),
+        Patch(facecolor=SURF, edgecolor=AXIS, linewidth=0.5,
+              linestyle=(0, (1.0, 1.6)), label="No configurations"),
     ]
-    fig.legend(handles=handles, loc="lower left",
-               bbox_to_anchor=(0.018,
-                               (NOTE_BOT_MM + note_h_mm + LEG_GAP_MM) / H_MM),
-               ncol=3, fontsize=6.2, frameon=False, handlelength=1.6,
-               handleheight=1.1, columnspacing=1.6, labelspacing=0.55)
+    marks = [
+        Line2D([], [], marker="o", ms=3.0, lw=0.9,
+               color=FAM_LINE["weighted"],
+               label="Weighted-urgency rule, 95% interval"),
+        Line2D([], [], marker="s", ms=3.0, lw=0.9, color=FAM_LINE["duedate"],
+               label="Due-date rule"),
+        Patch(facecolor="#ffffff", edgecolor=FAM_LINE["weighted"],
+              linewidth=1.0, linestyle=(0, (2, 1.4)),
+              label="Weighted family only when campus 2 is included"),
+    ]
+    fig.legend(handles=fills, loc="lower left",
+               bbox_to_anchor=(2.0 / W, 16.5 / H_MM), ncol=len(fills),
+               fontsize=PT_SMALL, frameon=False, handlelength=1.5,
+               handleheight=1.0, columnspacing=1.6, handletextpad=0.5)
+    fig.legend(handles=marks, loc="lower left",
+               bbox_to_anchor=(2.0 / W, 13.1 / H_MM), ncol=len(marks),
+               fontsize=PT_SMALL, frameon=False, handlelength=1.5,
+               handleheight=1.0, columnspacing=1.6, handletextpad=0.5)
 
-    fig.text(0.018, NOTE_BOT_MM / H_MM, "\n".join(note_lines), fontsize=5.4,
-             color=INK, ha="left", va="bottom", linespacing=1.5)
+    # ---- one micro-note band ------------------------------------------------
+    note = (f"Panel (a) covers every campus except campus 2; n counts base "
+            f"instances, and a cell needs {min_cl} of them for a verdict. "
+            f"Panel (b) covers campus 2 alone, its crews resized to the "
+            f"stated percentile of each trade's weekly hours; beside each "
+            f"interval the panel prints the difference in weighted-tardiness "
+            f"units and its verdict, and the grey band spans the "
+            f"±{margin_pct[arms[0]]:.0f}% practical-equivalence margin either "
+            f"side of EDD.")
+    fig.text(2.0 / W, 2.0 / H_MM,
+             "\n".join(textwrap.wrap(note, 137)), fontsize=PT_SMALL,
+             color=INK, ha="left", va="bottom", linespacing=1.45)
 
     _check_fit(fig, reg, "f4_map")
+    _check_texts(fig, "f4_map")
     save(fig, "f4_map")
 
-    print("   F4 headlines by bin (empirical / generator):")
-    for b in UBINS:
-        e_ = cell_headline(emp[b]["members"], emp[b]["dist"],
-                           emp[b]["verdict"])[0]
-        g_lab = "n/a" if gen[b] is None else cell_headline(
-            gen[b]["members"], gen[b]["dist"], gen[b]["verdict"])[0]
-        print(f"     u {b:<8} empirical={e_:<15} generator={g_lab}")
-    print(f"   F4 side panel: undersized portfolio {q75_lab} "
-          f"(set {n_q75}: {' '.join(sorted(q75m))}), u_mean {u75.u_mean:.2f}; "
-          f"campus 2 {st_lab} (set {len(st['members'])})")
-    if changed:
-        print("   F4 cells the headline rule moved:")
-        for where, old, new in changed:
-            print(f"     {where:<20} {old}  ->  {new}")
-    else:
-        print("   F4: no cell changed headline")
+    # ---- what the figure asserts, in the log -------------------------------
+    counts = gv.recommended_family.value_counts().to_dict()
+    print(f"   F4 panel (a) scope {GRID_SCOPE}: "
+          + ", ".join(f"{k} {v}" for k, v in sorted(counts.items()))
+          + f", blank {len(blanks)}")
+    for ob in reversed(OVBANDS):
+        row = []
+        for ub in UBINS:
+            r = cellv.get((ub, ob))
+            row.append("--" if r is None
+                       else f"{r.recommended_family}({int(r.n_clusters)})")
+        print(f"     ov {ob:<9} " + " ".join(f"{c:<16}" for c in row))
+    print(f"   F4 weighted-family cells with campus 2: {campus2_only}")
+    print(f"   F4 panel (b) margin band ±{margin_pct[arms[0]]:.2f}% "
+          f"(equal across rungs: {one_margin})")
+    for a in arms:
+        print(f"     {_quantile_token(a)}  median u {rung[a]['u_median']:.2f}"
+              f"  n {rung[a]['n']}")
+        for key, nice, _, _ in LADDER_RULES:
+            d = lad[(a, key)]
+            print(f"       {nice:<6} {d['diff']:>10.1f} "
+                  f"[{d['lo_abs']:.1f}, {d['hi_abs']:.1f}]   "
+                  f"{d['pct']:>7.2f}% [{d['lo']:.2f}, {d['hi']:.2f}]  "
+                  f"{d['verdict']}")
 
 
 # ===========================================================================
@@ -954,12 +848,15 @@ def fig3_curves():
 
     ax.text(1.18, 2.2e5, "overload\nu > 1", ha="center", va="top", fontsize=5.4,
             color=INK, style="italic")
-    # the diagnostic floors, stated as a ratio to the scope best at the top load
+    # the diagnostic floors, stated as a ratio to the EDD mean at the top load
+    # (the fixed family-level reference; a scope-best ratio would lean on a
+    # single lucky training seed)
     top_u = max(us)
+    edd_mean = g[(g.method == "edd") & (g.u == top_u)]["mean"].iloc[0]
     for m in ("lpt", "random"):
-        r = g[(g.method == m) & (g.u == top_u)].ratio_to_best.iloc[0]
+        r = g[(g.method == m) & (g.u == top_u)]["mean"].iloc[0] / edd_mean
         ax.text(1.358, ypos[dict(lpt="LPT", random="Random")[m]] * 0.72,
-                f"{r:.1f}× the best\nat u = {top_u:g}", ha="left", va="center",
+                f"{r:.1f}× the EDD mean\nat u = {top_u:g}", ha="left", va="center",
                 fontsize=5.4, color=INK, style="italic", clip_on=False,
                 linespacing=1.35)
 
