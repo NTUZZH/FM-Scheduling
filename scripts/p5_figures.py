@@ -51,7 +51,7 @@ INK2     = "#52514e"   # secondary text
 MUTE     = "#898781"   # axis / muted labels
 GRID     = "#e1e0d9"   # hairline gridline
 AXIS     = "#c3c2b7"   # baseline / axis
-SURF     = "#fcfcfb"   # chart surface
+SURF     = "#ffffff"   # chart surface (pure white: the page is white)
 TIEGRAY  = "#c3c2b7"   # "top tier" shared color (neutral -> reads as "no winner")
 TIEFILL  = "#d9d8d1"   # lighter tie fill for map cells
 
@@ -73,8 +73,8 @@ CMAP = {
     "policy":"#2a78d6",  # blue (learned policy, protagonist)
 }
 PRETTY = {"edd":"EDD","pfifo":"pFIFO","atc":"ATC","wmdd":"WMDD","wspt":"WSPT","lpt":"LPT",
-          "random":"Random","ga":"GA","cpsat":"CP-SAT","cpsat60":"CP-SAT 60s",
-          "cpsat300":"CP-SAT 300s","roll":"Rolling CP-SAT","policy":"Policy"}
+          "random":"Random","ga":"GA","cpsat":"CP-SAT","cpsat60":"CP-SAT 60 s",
+          "cpsat300":"CP-SAT 300 s","roll":"Rolling CP-SAT","policy":"Policy"}
 
 def mcol(m):
     """color for a raw method token from any results file."""
@@ -142,6 +142,12 @@ def set_style():
     })
 
 MM = 1/25.4
+# cas-sc \textwidth = 468.3324 pt = 164.5 mm. EVERY figure the manuscript
+# includes at width=\textwidth is written out at exactly this width, so a point
+# in the script is a point on the page and one type scale holds across the
+# whole paper. A figure saved at any other width is silently rescaled by LaTeX,
+# which is how 6.2 pt labels ended up printing at 5.1 pt.
+TEXTWIDTH_MM = 164.5
 def figsize(w_mm, h_mm): return (w_mm*MM, h_mm*MM)
 
 def style_ax(ax):
@@ -151,12 +157,40 @@ def style_ax(ax):
     ax.tick_params(length=2.2, width=0.5, color=MUTE, labelcolor=INK)
     return ax
 
-def save(fig, name, tight=True):
-    kw = dict(bbox_inches="tight", pad_inches=0.02) if tight else {}
-    fig.savefig(f"{FIGDIR}/{name}.pdf", **kw)
+def save(fig, name, tight=True, width_mm=TEXTWIDTH_MM, pad=0.02):
+    """Write <name>.pdf + .png at EXACTLY ``width_mm`` on the page.
+
+    ``tight`` crops the vertical extent to the ink (so no figure carries a
+    blank band above or below it) but never the horizontal one: the saved box
+    is widened back to the manuscript's text width and centred on the ink, so
+    the figure prints at 1:1 and its ink is centred in the frame at the same
+    time. A figure whose ink is wider than the text width is a design error and
+    aborts rather than being silently shrunk by LaTeX.
+    """
+    from matplotlib.transforms import Bbox
+    target = width_mm * MM
+    if tight:
+        fig.canvas.draw()
+        bb = fig.get_tightbbox(fig.canvas.get_renderer()).padded(pad)
+        if bb.width > target + 1e-6:
+            raise SystemExit(
+                f"{name}: ink is {bb.width/MM:.1f} mm wide, wider than the "
+                f"{width_mm} mm text width; narrow the design instead of "
+                f"letting LaTeX rescale the type")
+        cx = 0.5 * (bb.x0 + bb.x1)
+        box = Bbox([[cx - target / 2, bb.y0], [cx + target / 2, bb.y1]])
+    else:
+        w, h = fig.get_size_inches()
+        cx = w / 2
+        box = Bbox([[cx - target / 2, 0.0], [cx + target / 2, h]])
+    kw = dict(bbox_inches=box)
+    # No creation timestamp in the PDF: two runs of this script on unchanged
+    # inputs must produce byte-identical files, so a re-render can be checked
+    # against the released figure with a checksum.
+    fig.savefig(f"{FIGDIR}/{name}.pdf", metadata={"CreationDate": None}, **kw)
     fig.savefig(f"{FIGDIR}/{name}.png", dpi=300, **kw)
     plt.close(fig)
-    print(f"  wrote {name}.pdf + .png")
+    print(f"  wrote {name}.pdf + .png  ({box.width/MM:.1f} x {box.height/MM:.1f} mm)")
 
 def fmt_wwt(v):
     if v < 10: return f"{v:.1f}"
@@ -189,43 +223,110 @@ def label_ladder(logvals, minsep):
 # F1  pipeline schematic
 # ============================================================================
 def fig1_pipeline():
-    fig = plt.figure(figsize=figsize(180, 74))
-    ax = fig.add_axes([0,0,1,1]); ax.set_xlim(0,180); ax.set_ylim(0,74); ax.axis("off")
+    """The benchmark pipeline, as a five-stage column grid.
 
-    def box(x, y, w, h, title, sub=None, fc=SURF, ec=AXIS, tc=INK, lw=0.8, accent=None, fs=7.2,
-            fs_sub=6.1):
-        p = FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.6,rounding_size=1.8",
-                           linewidth=lw, edgecolor=ec, facecolor=fc, zorder=2)
-        ax.add_patch(p)
-        if accent:  # left accent bar
-            ax.add_patch(Rectangle((x, y), 1.6, h, facecolor=accent, edgecolor="none", zorder=3))
-        cy = y + h/2 + (1.7 if sub else 0)
-        ax.text(x+w/2+ (0.8 if accent else 0), cy, title, ha="center", va="center",
-                fontsize=fs, color=tc, weight="bold", zorder=4)
-        if sub:
-            ax.text(x+w/2+(0.8 if accent else 0), y+h/2-2.4, sub, ha="center", va="center",
-                    fontsize=fs_sub, color=INK, zorder=4)
-        return (x, y, w, h)
+    Geometry is in millimetres on the page: the canvas is the manuscript's
+    text width, so a point in this function is a point in the printed figure.
+    Five equal columns carry the five numbered stages; a stage that forks or
+    that produces two artefacts stacks two boxes in its column, and the two
+    hub stages centre one box across the same band. Every box is the same
+    width and the same height, arrows run left to right, and the only filled
+    box is the artefact the paper delivers.
+    """
+    # The drawing fills the canvas, so the file is written at exactly the text
+    # width without a tight crop (an axes covering the figure has no slack for
+    # one to remove).
+    W, H = TEXTWIDTH_MM, 39.0
+    NCOL, GAP = 5, 6.0
+    CW = (W - 3.0 - (NCOL - 1) * GAP) / NCOL        # column (= box) width
+    COLX = [1.5 + i * (CW + GAP) for i in range(NCOL)]
+    BH = 14.0                     # stacked-box height
+    TOP_Y, BOT_Y = 19.5, 1.5      # bottoms of the upper and lower box rows
+    MID_H = 18.0                  # the two hub boxes, centred on the band
+    MID_Y = 0.5 * (BOT_Y + TOP_Y + BH - MID_H)
+    LABEL_Y = TOP_Y + BH + 2.6
 
-    def arrow(a, b, side_a="r", side_b="l", color=MUTE, lw=1.0, rad=0.0):
-        ax_, ay_, aw, ah = a; bx_, by_, bw, bh = b
-        pa = {"r":(ax_+aw, ay_+ah/2), "l":(ax_, ay_+ah/2), "t":(ax_+aw/2, ay_+ah), "b":(ax_+aw/2, ay_)}[side_a]
-        pb = {"r":(bx_+bw, by_+bh/2), "l":(bx_, by_+bh/2), "t":(bx_+bw/2, by_+bh), "b":(bx_+bw/2, by_)}[side_b]
-        ax.add_patch(FancyArrowPatch(pa, pb, arrowstyle="-|>", mutation_scale=8,
-                     linewidth=lw, color=color, connectionstyle=f"arc3,rad={rad}", zorder=1))
+    fig = plt.figure(figsize=figsize(W, H))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, W); ax.set_ylim(0, H); ax.axis("off")
 
-    # --- stage 1: source + cleaning (left column) ---
-    b_src = box(3, 46, 30, 15, "FMUCD", "raw work-order log", accent=CMAP["policy"])
-    b_cln = box(3, 22, 30, 15, "Cleaning R1-R7", "de-dup, priority + trade maps", accent=CMAP["policy"])
-    arrow(b_src, b_cln, "b", "t", lw=1.1)
+    # One accent, one meaning: the benchmark itself is the artefact the paper
+    # delivers, so it is the single filled box and the figure's focal point.
+    ACCENT = pastel(CMAP["policy"], 0.80)
 
-    # --- stage 2: two tracks ---
-    b_rep = box(43, 49, 40, 13, "[R] Empirical track", "first-N releases, non-overlap", accent=CMAP["edd"])
-    b_gen = box(43, 22, 40, 13, "[C] Generator track", "fitted packs + contention parameters", accent=CMAP["wspt"], fs_sub=5.7)
-    arrow(b_cln, b_rep, "r", "l", rad=-0.18, lw=1.1)
-    arrow(b_cln, b_gen, "r", "l", rad=0.12, lw=1.1)
+    # Line breaks are MEASURED, not guessed: every string is wrapped to the box
+    # width with the renderer, so no label can overhang its own box when the
+    # column count or the wording changes.
+    fig.canvas.draw()
+    _rend = fig.canvas.get_renderer()
+    PT_TITLE, PT_SUB = 7.0, 6.3
+    TEXT_W = CW - 2.4                     # usable width inside a box
 
-    # --- stage 3: instances (merge) ---
+    def _w_mm(s, fs, weight="normal"):
+        t = fig.text(0, 0, s, fontsize=fs, weight=weight)
+        w = t.get_window_extent(_rend).width / fig.dpi * 25.4
+        t.remove()
+        return w
+
+    def _wrap(s, fs, max_mm):
+        out = []
+        for para in s.split("\n"):        # an explicit break is always kept
+            cur = ""
+            for word in para.split():
+                trial = (cur + " " + word).strip()
+                if cur and _w_mm(trial, fs) > max_mm:
+                    out.append(cur)
+                    cur = word
+                else:
+                    cur = trial
+            if cur:
+                out.append(cur)
+        return out
+
+    def box(col, y, h, title, sub="", fc=SURF):
+        x = COLX[col]
+        ax.add_patch(Rectangle((x, y), CW, h, facecolor=fc, edgecolor=INK,
+                               linewidth=0.6, zorder=2))
+        assert _w_mm(title, PT_TITLE, "bold") <= TEXT_W, (title, CW)
+        lines = _wrap(sub, PT_SUB, TEXT_W) if sub else []
+        n = 1 + len(lines)
+        # one 2.5 mm slot per line, the block centred in the box
+        y0 = y + h / 2 + (n - 1) * 1.25
+        ax.text(x + CW / 2, y0, title, ha="center", va="center",
+                fontsize=PT_TITLE, color=INK, weight="bold", zorder=4)
+        for k, ln in enumerate(lines):
+            ax.text(x + CW / 2, y0 - 2.5 * (k + 1), ln, ha="center",
+                    va="center", fontsize=PT_SUB, color=INK, zorder=4)
+        return (x, y, CW, h)
+
+    def arrow(a, b, side_a="r", side_b="l", rad=0.0):
+        ax_, ay_, aw, ah = a
+        bx_, by_, bw, bh = b
+        pa = {"r": (ax_ + aw, ay_ + ah / 2), "l": (ax_, ay_ + ah / 2),
+              "t": (ax_ + aw / 2, ay_ + ah), "b": (ax_ + aw / 2, ay_)}[side_a]
+        pb = {"r": (bx_ + bw, by_ + bh / 2), "l": (bx_, by_ + bh / 2),
+              "t": (bx_ + bw / 2, by_ + bh), "b": (bx_ + bw / 2, by_)}[side_b]
+        ax.add_patch(FancyArrowPatch(pa, pb, arrowstyle="-|>",
+                                     mutation_scale=7, linewidth=0.8,
+                                     color=INK, shrinkA=1.0, shrinkB=1.0,
+                                     connectionstyle=f"arc3,rad={rad}",
+                                     zorder=1))
+
+    # ---- stage 1: the source log and the cleaning rules --------------------
+    b_src = box(0, TOP_Y, BH, "FMUCD", "raw work-order log")
+    b_cln = box(0, BOT_Y, BH, "Cleaning R1\u2013R7",
+                "de-duplication, priority and trade maps")
+    arrow(b_src, b_cln, "b", "t")
+
+    # ---- stage 2: the two instance tracks ----------------------------------
+    b_rep = box(1, TOP_Y, BH, "[R] Empirical track",
+                "first-N releases, non-overlapping")
+    b_gen = box(1, BOT_Y, BH, "[C] Generator track",
+                "fitted packs, contention parameters")
+    arrow(b_cln, b_rep, "r", "l", rad=-0.22)
+    arrow(b_cln, b_gen, "r", "l")
+
+    # ---- stage 3: the released instances (counts read from the results) ----
     # counts are COMPUTED from the released result files so the schematic can
     # never drift out of sync with what was actually evaluated.
     _e1 = pd.read_csv(f"{ROOT}/results/e1_static/results.csv", usecols=["id"])
@@ -242,42 +343,33 @@ def fig1_pipeline():
     _n_static = _e1["id"].nunique()
     _n_dyn = len(_dy.fillna(-1).drop_duplicates())
     del _e1, _dy
-    b_ins = box(92, 35, 30, 15, "Benchmark\ninstances",
-                f"{_n_static:,} static / {_n_dyn:,} dynamic", accent=INK2)
-    arrow(b_rep, b_ins, "r", "l", rad=0.14, lw=1.1)
-    arrow(b_gen, b_ins, "r", "l", rad=-0.14, lw=1.1)
+    b_ins = box(2, MID_Y, MID_H, "Benchmark instances",
+                f"{_n_static:,} static\n{_n_dyn:,} dynamic", fc=ACCENT)
+    arrow(b_rep, b_ins, "r", "l", rad=0.16)
+    arrow(b_gen, b_ins, "r", "l", rad=-0.16)
 
-    # --- stage 4: methods suite ---
-    b_met = box(131, 35, 46, 15, "", None, accent=INK2)
-    ax.text(155.5, 47.4, "Methods suite", ha="center", va="center", fontsize=7.2, color=INK, weight="bold", zorder=5)
-    # The first two rows hold the seven dispatching rules, the third the three
-    # search-based schedulers and the learned policy; the gap that ends row two
-    # is the break between the two groups, so the box reads as the caption does.
-    chips = [("EDD","edd"),("pFIFO","pfifo"),("WSPT","wspt"),("ATC","atc"),
-             ("WMDD","wmdd"),("LPT","lpt"),("Random","random"),
-             ("GA","ga"),("CP-SAT","cpsat"),("Rolling","roll"),("Policy","policy")]
-    col_x = [133.5, 144.3, 155.1, 165.9]; row_y = [43.6, 40.0, 36.4]
-    slots = [(0,0),(0,1),(0,2),(0,3), (1,0),(1,1),(1,2), (2,0),(2,1),(2,2),(2,3)]
-    for (lab,key),(r,c) in zip(chips, slots):
-        xx = col_x[c]; yy = row_y[r]
-        ax.add_patch(Rectangle((xx, yy), 1.9, 1.9, facecolor=suite_color(key), edgecolor="none", zorder=4))
-        ax.text(xx+2.3, yy+0.95, lab, ha="left", va="center", fontsize=5.6, color=INK, zorder=4)
-    arrow(b_ins, b_met, "r", "l", lw=1.1)
+    # ---- stage 4: the method suite (the caption enumerates every method) ---
+    b_met = box(3, MID_Y, MID_H, "Method suite",
+                "seven dispatching rules,\na genetic algorithm,\n"
+                "exact and rolling CP-SAT,\nthe learned policy")
+    arrow(b_ins, b_met, "r", "l")
 
-    # --- stage 5: validator + outputs (down) ---
-    b_val = box(131, 11, 46, 13, "Independent validator", "feasibility + weighted tardiness", accent=CMAP["lpt"])
-    arrow(b_met, b_val, "b", "t", lw=1.1)
-    b_out = box(92, 11, 30, 13, "Metrics +\ndecision map", None, accent=CMAP["policy"])
-    arrow(b_val, b_out, "l", "r", lw=1.1)
+    # ---- stage 5: scoring, independent of every scheduler ------------------
+    b_val = box(4, TOP_Y, BH, "Independent validator",
+                "feasibility and weighted tardiness")
+    b_out = box(4, BOT_Y, BH, "Metrics + decision map",
+                "which rule family to use, and when")
+    arrow(b_met, b_val, "r", "l", rad=0.16)
+    arrow(b_val, b_out, "b", "t")
 
-    # flow band labels
-    ax.text(18, 66.5, "1  Data + cleaning", fontsize=6.4, color=INK, ha="center", style="italic")
-    ax.text(63, 66.5, "2  Two instance tracks", fontsize=6.4, color=INK, ha="center", style="italic")
-    ax.text(107, 55.5, "3  Instances", fontsize=6.4, color=INK, ha="center", style="italic")
-    ax.text(154, 55.5, "4  Schedulers", fontsize=6.4, color=INK, ha="center", style="italic")
-    ax.text(129, 4.5, "5  Score + characterise (independent of the schedulers)", fontsize=6.4, color=INK, ha="center", style="italic")
+    # ---- stage band labels, on one shared line ----------------------------
+    for i, lab in enumerate(["1  Data + cleaning", "2  Two instance tracks",
+                             "3  Instances", "4  Schedulers",
+                             "5  Score + characterise"]):
+        ax.text(COLX[i] + CW / 2, LABEL_Y, lab, ha="center", va="bottom",
+                fontsize=6.6, color=INK, style="italic")
 
-    save(fig, "f1_pipeline")
+    save(fig, "f1_pipeline", tight=False)
 
 # ============================================================================
 # F2  static benchmark (2 panels)
@@ -296,7 +388,12 @@ def fig2_static():
     assert list(sorted(order, key=lambda m: gaps[m])) == order, \
         {m: round(gaps[m], 3) for m in order}
 
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=figsize(180, 66), gridspec_kw=dict(wspace=0.42))
+    # Designed a shade wider than the text width so that, once the tight crop
+    # and the fixed-width write-out are applied, the two panels FILL the text
+    # width; the type is absolute, so widening the canvas widens the axes
+    # without changing a single printed point size.
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=figsize(187, 66),
+                                   gridspec_kw=dict(wspace=0.42))
 
     # ---- Panel A: ordered horizontal bars, log-x gap ----
     style_ax(axA)
@@ -309,7 +406,7 @@ def fig2_static():
         c = suite_color(m)
         axA.barh(y, gaps[m], height=0.62, color=pastel(c), edgecolor=c,
                  linewidth=0.7, zorder=3)
-        axA.text(gaps[m]*1.14, y, fmt_wwt(gaps[m]), va="center", ha="left", fontsize=6.0, color=INK, zorder=4)
+        axA.text(gaps[m]*1.14, y, fmt_wwt(gaps[m]), va="center", ha="left", fontsize=6.2, color=INK, zorder=4)
     axA.set_yticks(ypos)
     axA.set_yticklabels([PRETTY.get(m,m) for m in order], fontsize=6.8, color=INK)
     axA.set_xscale("log")
@@ -328,11 +425,11 @@ def fig2_static():
     # diagnostic floor = rows 8-9 (row index counted from the top). The wording
     # is the caption's and the body's: "dispatching rules", "diagnostic floors".
     _row = lambda m: ypos[order.index(m)]
-    axA.text(0.14, _row("cpsat300") + 0.55, "exact / near-exact", fontsize=6.1, color=INK, style="italic")
-    axA.text(15, _row("wmdd") + 0.55, "dispatching rules", fontsize=6.1, color=INK, style="italic")
+    axA.text(0.14, _row("cpsat300") + 0.55, "exact / near-exact", fontsize=6.2, color=INK, style="italic")
+    axA.text(15, _row("wmdd") + 0.55, "dispatching rules", fontsize=6.2, color=INK, style="italic")
     # raised well clear of the random-ordering bar's own value label, and kept
     # right of the EDD bar's end so the extra height costs no overlap
-    axA.text(135, _row("random") + 0.42, "diagnostic floor", fontsize=6.1,
+    axA.text(135, _row("random") + 0.42, "diagnostic floor", fontsize=6.2,
              color=INK, style="italic", va="bottom")
     # GA beats cpsat60 annotation. The caption states the count; the figure
     # only points at the bar the claim is about.
@@ -340,11 +437,13 @@ def fig2_static():
     # clear of the '4.3' value label sitting just right of the bar end.
     axA.annotate("GA improves on CP-SAT 60 s here",
                  xy=(gaps["ga"]*0.55, ypos[order.index("ga")]),
-                 xytext=(9, _row("cpsat60") + 0.9), fontsize=6.1, color=INK, ha="left", va="center",
+                 xytext=(9, _row("cpsat60") + 0.9), fontsize=6.2, color=INK, ha="left", va="center",
                  arrowprops=dict(arrowstyle="-", color=MUTE, lw=0.6,
                                  connectionstyle="arc3,rad=-0.2"))
-    axA.set_title(f"(a)  Solution quality on nonzero instances (n={int(nz.sum()):,})", loc="left",
-                  fontsize=7.4, color=INK, weight="bold", pad=6)
+    # The caption is the title and it carries the instance count, so the panel
+    # carries only its tag.
+    axA.set_title("(a)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=6)
 
     # ---- Panel B: latency vs quality scatter ----
     style_ax(axB)
@@ -374,7 +473,7 @@ def fig2_static():
     for m in RULES_B:
         axB.annotate(LAB_B.get(m, m), xy=(lat[m], gaps[m]),
                      xytext=(XCOL, LADDER[m]), textcoords="data",
-                     fontsize=6.1, color=INK, ha="left", va="center", zorder=5,
+                     fontsize=6.2, color=INK, ha="left", va="center", zorder=5,
                      arrowprops=dict(arrowstyle="-", color=suite_color(m),
                                      lw=0.8, shrinkA=1.0, shrinkB=3.5))
     # the three search-based schedulers are far apart: plain adjacent labels
@@ -383,7 +482,7 @@ def fig2_static():
              "cpsat300": (-7, 0, "right", "center")}
     for m, (dx, dy, ha, va) in OFF_S.items():
         axB.annotate(LAB_B.get(m, m), (lat[m], gaps[m]), textcoords="offset points",
-                     xytext=(dx, dy), fontsize=6.1, color=INK, ha=ha, va=va)
+                     xytext=(dx, dy), fontsize=6.2, color=INK, ha=ha, va=va)
     axB.set_xlabel("Decision latency per instance  (ms, log)", fontsize=6.9)
     axB.set_ylabel("Mean gap to best-known TWT  (log)", fontsize=6.9)
     # plain decimal tick labels here too, for the same print-size reason
@@ -395,8 +494,8 @@ def fig2_static():
     axB.set_yticklabels(["0.1", "1", "10", "100", "1,000"], fontsize=6.4)
     axB.grid(True, which="major", color=GRID, linewidth=0.5)
     # guide regions
-    axB.text(0.7, 0.16, "fast, coarse", fontsize=6.1, color=INK, style="italic")
-    axB.text(1600, 300, "slow, exact", fontsize=6.1, color=INK, style="italic", ha="center")
+    axB.text(0.7, 0.16, "fast, coarse", fontsize=6.2, color=INK, style="italic")
+    axB.text(1600, 300, "slow, exact", fontsize=6.2, color=INK, style="italic", ha="center")
     # the trade-off guide starts to the right of the rule cluster, so it never
     # crosses a direct label
     _FR = ((2.5, 700.0), (3500.0, 0.3))
@@ -405,12 +504,12 @@ def fig2_static():
     # rotate the guide's label by the line's angle ON THE PAGE, measured through
     # the axes transform, so it stays parallel whatever the panel's aspect is
     (_x0, _y0), (_x1, _y1) = (axB.transData.transform(p) for p in _FR)
-    axB.text(55, 8, "quality--latency\ntrade-off", fontsize=6.1, color=INK,
+    axB.text(55, 8, "quality\u2013latency\ntrade-off", fontsize=6.2, color=INK,
              style="italic", ha="center", va="center",
              rotation=math.degrees(math.atan2(_y1 - _y0, _x1 - _x0)),
              rotation_mode="anchor")
-    axB.set_title("(b)  Latency vs quality trade-off", loc="left",
-                  fontsize=7.4, color=INK, weight="bold", pad=6)
+    axB.set_title("(b)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=6)
     save(fig, "f2_static")
 
 # ============================================================================
@@ -711,8 +810,10 @@ F5_RULES = [("edd", "EDD"), ("pfifo", "pFIFO"), ("wmdd", "WMDD"), ("atc", "ATC")
 F5_POOLS = [(r"^v2rl\d+$", "Policy pool"),
             (r"^v2at\d+$", "Attention pool"),
             (r"^rl\d+$", "Curriculum-v1 pool")]
-F5_SCOPES = [("transfer", "campus=1|m=1.0", "Campus 1  ·  transfer"),
-             ("stress", "campus=2|m=1.0", "Campus 2  ·  chronic overload")]
+# Each panel names the campus it holds and nothing else: the caption already
+# says which is the transfer campus and which is chronically overloaded.
+F5_SCOPES = [("transfer", "campus=1|m=1.0", "Campus 1"),
+             ("stress", "campus=2|m=1.0", "Campus 2")]
 # Pastel amber, with the medium amber for its edge: the margin is a protocol
 # threshold and not a method, so it takes a hue no method in this figure uses
 # (a pastel blue would read as the learned pools' own colour).
@@ -756,11 +857,10 @@ def fig5_transfer():
     panels = [rows_for(st, sc) + (title,) for st, sc, title in F5_SCOPES]
     nrow = len(panels[0][0])
 
-    # cas-sc places every figure at width=\\linewidth = 468.33 pt = 165.1 mm, so
-    # the canvas is built at that width and the printed text size is the source
-    # size; a narrower canvas would be enlarged and print oversized.
-    fig = plt.figure(figsize=figsize(165.1, 74))
-    left, bot, height = 0.163, 0.250, 0.620
+    # The canvas IS the manuscript's text width, so the printed text size is
+    # the source size; a narrower canvas would be enlarged and print oversized.
+    fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, 74))
+    left, bot, height = 0.152, 0.250, 0.620
     width, gapw = 0.393, 0.043
     for i, (rows, margin_pct, n_cfg, n_meth, n_set, title) in enumerate(panels):
         ax = fig.add_axes([left + i * (width + gapw), bot, width, height])
@@ -798,7 +898,7 @@ def fig5_transfer():
             if brk is not None and F5_LEFTF - 0.004 < x < F5_LEFTF + F5_GAPF:
                 x = F5_LEFTF + F5_GAPF + 0.008
             return x
-        charw = 3.1 / (width * 165.1 / 25.4 * 72.0)     # one digit at 6.2 pt
+        charw = 3.1 / (width * TEXTWIDTH_MM / 25.4 * 72.0)   # one digit at 6.2 pt
         xhi = max(_tx(r) + charw * len(_txt(r)) for r in rows) + 0.012
         # the margin band: a rule is in the set when its whole interval is inside
         ax.axvspan(0, T(margin_pct), color=BAND, zorder=0, linewidth=0)
@@ -854,7 +954,7 @@ def fig5_transfer():
                       fontsize=7.0, labelpad=3)
         ax.text(0.5, 1.085, title, transform=ax.transAxes, ha="center",
                 va="bottom", fontsize=7.4, color=INK)
-        ax.text(0.5, 1.018, f"n {n_cfg}", transform=ax.transAxes, ha="center",
+        ax.text(0.5, 1.018, f"n = {n_cfg}", transform=ax.transAxes, ha="center",
                 va="bottom", fontsize=6.4, color=INK, style="italic")
 
     handles = [
@@ -869,7 +969,9 @@ def fig5_transfer():
                markerfacecolor=SURF, markeredgecolor=CMAP["policy"],
                markersize=3.4, label="pool: seed range, median, seeds in set"),
     ]
-    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.56, 0.006),
+    # centred on the two panels, which is where the eye returns from the key
+    fig.legend(handles=handles, loc="lower center",
+               bbox_to_anchor=(left + width + gapw / 2, 0.006),
                ncol=4, fontsize=6.4, frameon=False, handlelength=1.7,
                columnspacing=1.2, labelspacing=0.40)
     save(fig, "f5_transfer", tight=False)
@@ -943,7 +1045,10 @@ def fig6_sensitivity():
              fontsize=8.0, color=INK, weight="bold")
     fig.text(0.020, 0.025, "hatched: $\\tau < 0.8$ (ranking perturbed).\nn/a: degenerate cell (baseline fully tied).",
              ha="left", va="bottom", fontsize=6.6, color=INK2)
-    save(fig, "f6_sensitivity", tight=False)
+    # dead code: superseded by f6_robustness (scripts/r4_figures.py) and no
+    # longer input by the manuscript. It is a single-column exhibit, so it
+    # keeps its own width rather than the text width.
+    save(fig, "f6_sensitivity", tight=False, width_mm=88)
 
 # ============================================================================
 MAIN = {"f1": fig1_pipeline, "f2": fig2_static, "f5": fig5_transfer}

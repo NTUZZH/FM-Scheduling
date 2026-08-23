@@ -93,10 +93,11 @@ def fit_params(clean_df: pd.DataFrame, campus: int,
     """Fit the per-campus generator parameter pack.
 
     ``clean_df`` may be the full multi-campus cleaned frame or one already
-    filtered to ``campus`` (fast path for tests). The MISC merge and crew
-    capacities are computed on ALL years of the campus (as in calib.py); the
-    arrival rate, lognormal, pm_share and priority distributions use train-year
-    rows only (WOStartDate <= 2017-12-31).
+    filtered to ``campus`` (fast path for tests). The MISC merge and the
+    per-campus labour cap are computed over ALL years of the campus; the crew
+    sizes (calib.build_capacity, whose weekly-hours quantile is train-only),
+    the arrival rate, the lognormal, pm_share and the priority distributions
+    all use train-year rows only (WOStartDate <= 2017-12-31).
     """
     campus = int(campus)
     cdf = _campus_frame(clean_df, campus)

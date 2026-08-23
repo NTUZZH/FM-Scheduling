@@ -38,7 +38,7 @@ import matplotlib.ticker as mticker
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from p5_figures import (  # noqa: E402
     set_style, save, style_ax, figsize, label_ladder, CMAP, PRETTY,
-    INK, INK2, MUTE, GRID, AXIS, SURF, fmt_wwt, mcol,
+    INK, INK2, MUTE, GRID, AXIS, SURF, fmt_wwt, mcol, pastel,
 )
 
 ROOT = str(Path(__file__).resolve().parents[1])
@@ -172,10 +172,13 @@ def fig7_data():
     tr = pd.read_csv(f"{P0}/trades.csv")
     lh = pd.read_csv(f"{P0}/labor_hist.csv")
 
-    fig = plt.figure(figsize=figsize(180, 62))
-    gs = fig.add_gridspec(1, 4, width_ratios=[1.32, 1.12, 1.02, 1.06],
-                          left=0.045, right=0.995, top=0.86, bottom=0.155,
-                          wspace=0.42)
+    # Designed a shade narrower than the text width, because the panel (d)
+    # labels overhang their axes: the tight crop keeps that overhang, and the
+    # file must still leave at 164.5 mm so the type prints at its source size.
+    fig = plt.figure(figsize=figsize(161.0, 62))
+    gs = fig.add_gridspec(1, 4, width_ratios=[1.32, 1.12, 1.02, 1.14],
+                          left=0.050, right=0.988, top=0.895, bottom=0.155,
+                          wspace=0.40)
     axA, axB, axC, axD = (fig.add_subplot(gs[0, i]) for i in range(4))
 
     # ---- (a) monthly arrivals per campus (log-y, thin lines, direct labels) --
@@ -223,12 +226,13 @@ def fig7_data():
             axA.plot([xf, xf], [yf * 0.74, ylab * 1.30], color=INK2, lw=0.45,
                      solid_capstyle="butt", zorder=6)
             va = "top"
-        axA.text(xf, ylab, f"c{c}", color=INK, fontsize=5.8, ha="center",
+        axA.text(xf, ylab, f"c{c}", color=INK, fontsize=6.2, ha="center",
                  va=va, weight="bold", zorder=7,
                  path_effects=[pe.withStroke(linewidth=2.2, foreground=SURF)])
     axA.set_ylabel("work orders / month  (log)", fontsize=6.9)
-    axA.set_title("(a)  Monthly arrivals", loc="left", fontsize=7.4,
-                  color=INK, weight="bold", pad=5)
+    # The caption is the title; each panel carries only its tag.
+    axA.set_title("(a)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=5)
 
     # ---- (b) labour hours per order (log-x histogram) -----------------------
     style_ax(axB)
@@ -252,11 +256,11 @@ def fig7_data():
                           (p99, "p99\n49 h", "r")]:
         axB.axvline(xv, color=INK2, lw=0.8, ls=(0, (3, 2)), zorder=4)
         if side == "l":
-            axB.text(xv * 0.80, ymax * 0.93, lab, fontsize=5.7, color=INK,
-                     ha="right", va="top", linespacing=1.05)
+            axB.text(xv * 0.78, ymax * 0.95, lab, fontsize=6.2, color=INK,
+                     ha="right", va="top", linespacing=1.15)
         else:
-            axB.text(xv * 1.25, ymax * 0.93, lab, fontsize=5.7, color=INK,
-                     ha="left", va="top", linespacing=1.05)
+            axB.text(xv * 1.28, ymax * 0.95, lab, fontsize=6.2, color=INK,
+                     ha="left", va="top", linespacing=1.15)
     axB.set_xticks([0.1, 1, 10, 100])
     axB.set_xticklabels(["0.1", "1", "10", "100"], fontsize=6.2)
     axB.yaxis.set_major_formatter(
@@ -264,22 +268,25 @@ def fig7_data():
     axB.tick_params(axis="y", labelsize=6.2)
     axB.set_xlabel("labour hours  (log)", fontsize=6.9)
     axB.set_ylabel("work orders", fontsize=6.9)
-    axB.set_title("(b)  Labour hours per order", loc="left", fontsize=7.4,
-                  color=INK, weight="bold", pad=5)
+    axB.set_title("(b)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=5)
 
     # ---- (c) preventive share per campus (stacked horizontal) ---------------
     style_ax(axC)
     pc6 = pc[pc.UniversityID.isin(SCHEDULABLE)].sort_values("pm_share")
-    cm_col, pm_col = CMAP["wspt"], "#8aa0b6"   # corrective orange, preventive gray-blue
+    # Pastel fill for the corrective segment and a medium blue-grey for the
+    # preventive one: the saturated orange was a heavy block, and at its own
+    # luminance the two segments were indistinguishable in greyscale.
+    cm_col, pm_col = pastel(CMAP["wspt"], 0.45), "#8aa0b6"
     ypos = np.arange(len(pc6))
     for y, (_, r) in zip(ypos, pc6.iterrows()):
         pm = float(r.pm_share)
-        axC.barh(y, 1 - pm, height=0.66, left=0.0, color=cm_col, alpha=0.9,
+        axC.barh(y, 1 - pm, height=0.66, left=0.0, color=cm_col,
                  edgecolor=SURF, linewidth=0.5, zorder=3)
-        axC.barh(y, pm, height=0.66, left=1 - pm, color=pm_col, alpha=0.95,
+        axC.barh(y, pm, height=0.66, left=1 - pm, color=pm_col,
                  edgecolor=SURF, linewidth=0.5, zorder=3)
         axC.text(1.02, y, _kfmt(r.rows), va="center", ha="left",
-                 fontsize=6.0, color=INK)
+                 fontsize=6.2, color=INK)
     # a two-key inline legend above the top bar: the colour lives in the swatch,
     # the word is black (the top bar's corrective segment is too short to carry
     # a centred word without overhanging the axis)
@@ -288,7 +295,7 @@ def fig7_data():
         axC.add_patch(Rectangle((x0, ytop + 0.43), 0.055, 0.20, facecolor=col,
                                 edgecolor="none", clip_on=False, zorder=4))
         axC.text(x0 + 0.085, ytop + 0.53, lab, ha="left", va="center",
-                 fontsize=5.8, color=INK, zorder=4)
+                 fontsize=6.2, color=INK, zorder=4)
     axC.set_yticks(ypos)
     axC.set_yticklabels([f"c{int(c)}" for c in pc6.UniversityID], fontsize=6.6,
                         color=INK)
@@ -297,8 +304,8 @@ def fig7_data():
     axC.set_xticklabels(["0", "0.5", "1"], fontsize=6.2)
     axC.set_ylim(-0.6, len(pc6) - 0.1)
     axC.set_xlabel("share of work orders", fontsize=6.9)
-    axC.set_title("(c)  Preventive share", loc="left", fontsize=7.4,
-                  color=INK, weight="bold", pad=5)
+    axC.set_title("(c)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=5)
 
     # ---- (d) trade mix (top 8 + other) --------------------------------------
     # code as the (short) y-tick; description + share at the bar end, so the
@@ -318,22 +325,22 @@ def fig7_data():
     # lighter tint of the same hue, so its colour reads as "the rest of the same
     # thing" rather than as a second category
     for y, (code, desc, sh) in zip(ypos, rows_):
-        c = "#aeb9c2" if code == "other" else "#6b7a86"
-        axD.barh(y, sh * 100, height=0.68, color=c, alpha=0.92,
-                 edgecolor=SURF, linewidth=0.5, zorder=3)
+        c = "#e4e8ec" if code == "other" else "#c3cbd3"
+        axD.barh(y, sh * 100, height=0.68, color=c,
+                 edgecolor="#6f7780", linewidth=0.5, zorder=3)
         lab = f"{desc}  {sh*100:.0f}%" if desc else f"{sh*100:.0f}%"
-        axD.text(sh * 100 + 0.8, y, lab, va="center", ha="left",
-                 fontsize=5.7, color=INK)
+        axD.text(sh * 100 + 1.1, y, lab, va="center", ha="left",
+                 fontsize=6.2, color=INK)
     axD.set_yticks(ypos)
-    axD.set_yticklabels([r[0] for r in rows_], fontsize=6.0, color=INK)
-    axD.set_xlim(0, 62)
+    axD.set_yticklabels([r[0] for r in rows_], fontsize=6.2, color=INK)
+    axD.set_xlim(0, 68)
     axD.set_xticks([0, 10, 20, 30])
     axD.set_xticklabels(["0", "10", "20", "30"], fontsize=6.2)
     axD.set_ylim(-0.6, len(rows_) - 0.4)
     axD.set_xlabel("share of all work orders (%)", fontsize=6.9)
     axD.grid(axis="x", which="major", color=GRID, linewidth=0.4)
-    axD.set_title("(d)  Trade mix", loc="left", fontsize=7.4,
-                  color=INK, weight="bold", pad=5)
+    axD.set_title("(d)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=5)
     save(fig, "f7_data")
 
 
@@ -381,8 +388,9 @@ def fig8_priority():
     axA.set_xlabel("median close time of corrective orders (days)", fontsize=6.8)
     axA.set_ylim(-0.6, len(c2) - 0.4)
     axA.grid(axis="x", which="major", color=GRID, linewidth=0.4)
-    axA.set_title("(a)  Campus 2: text scale", loc="left", fontsize=7.3,
-                  color=INK, weight="bold", pad=4)
+    # The caption is the title; the panel carries only its tag.
+    axA.set_title("(a)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=4)
 
     # ---- (b) campus 12 numeric codes invert urgency (+ campus 1 contrast) ---
     style_ax(axB)
@@ -416,7 +424,7 @@ def fig8_priority():
     # code closes fastest, so the reader must be able to read it off the panel.
     # All four sit on the same side of the line, so the row reads as one row.
     for xc, yc in zip(codes[12], durs[12]):
-        axB.text(xc, yc + 3.0, f"{int(xc)}", fontsize=5.8, color=INK,
+        axB.text(xc, yc + 3.0, f"{int(xc)}", fontsize=6.2, color=INK,
                  ha="center", va="bottom", zorder=6)
     all_codes = np.concatenate([codes[1], codes[12]])
     all_durs = np.concatenate([durs[1], durs[12]])
@@ -429,8 +437,8 @@ def fig8_priority():
     axB.set_xlabel("raw priority code (campus-specific)", fontsize=6.8)
     axB.set_ylabel("median close time of corrective orders (days)", fontsize=6.8)
     axB.grid(axis="y", which="major", color=GRID, linewidth=0.4)
-    axB.set_title("(b)  Numeric codes invert", loc="left", fontsize=7.3,
-                  color=INK, weight="bold", pad=4)
+    axB.set_title("(b)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=4)
     save(fig, "f8_priority", tight=False)
 
 
@@ -469,11 +477,11 @@ def fig9_training():
     axA.set_ylim(408, 426)
     axA.set_yticks([410, 415, 420, 425])
     axA.tick_params(axis="y", labelsize=6.2)
-    axA.text(595, 411.6, "plateau: all variants 409–411", fontsize=5.9,
+    axA.text(595, 411.8, "plateau: all variants 409–411", fontsize=6.2,
              color=INK, ha="right", va="bottom", style="italic")
     axA.set_ylabel("dev TWT", fontsize=6.9)
-    axA.set_title("(a)  default-capacity development set \u00b7 10 seeds", loc="left", fontsize=7.3,
-                  color=INK, weight="bold", pad=4)
+    axA.set_title("(a)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=4)
 
     # ---- (b) tight-capacity dev (m=0.6): declining + selected checkpoints ---
     style_ax(axB)
@@ -492,18 +500,18 @@ def fig9_training():
     axB.set_yticks([440, 460, 480, 500])
     axB.tick_params(axis="y", labelsize=6.2)
     axB.text(300, 493, "selected checkpoint = per-seed minimum (\u25bc)",
-             fontsize=5.8, color=INK2, ha="center", va="center", style="italic")
+             fontsize=6.2, color=INK, ha="center", va="center", style="italic")
     # the early updates of several seeds run above the panel; say so rather than
     # let a reader read the clipped start as a curve that begins at 500
-    axB.text(590, 497.5, "traces clipped above 500", fontsize=5.8, color=INK,
+    axB.text(590, 497.5, "traces clipped above 500", fontsize=6.2, color=INK,
              ha="right", va="center", style="italic")
     axB.set_ylabel("dev TWT", fontsize=6.9)
     axB.set_xlim(0, 600)
     axB.set_xticks([0, 150, 300, 450, 600])
     axB.tick_params(axis="x", labelsize=6.2)
     axB.set_xlabel("PPO update", fontsize=6.9)
-    axB.set_title("(b)  tight-capacity development set (m=0.6) \u00b7 10 seeds", loc="left",
-                  fontsize=7.3, color=INK, weight="bold", pad=4)
+    axB.set_title("(b)", loc="left", fontsize=8.0, color=INK, weight="bold",
+                  pad=4)
     save(fig, "f9_training", tight=False)
 
 
@@ -520,7 +528,7 @@ def fig10_rolling():
     # ROLL_TEAL (the shipped Rolling CP-SAT hue everywhere in the paper).
     # All text is black; series identity is carried by marks and position.
     AO_COL = INK2
-    fig = plt.figure(figsize=figsize(164.5, 55))
+    fig = plt.figure(figsize=figsize(161.0, 50))
     gs = fig.add_gridspec(1, 2, width_ratios=[1.62, 1.0], left=0.06,
                           right=0.975, top=0.84, bottom=0.19, wspace=0.26)
     axA = fig.add_subplot(gs[0, 0])
@@ -553,25 +561,31 @@ def fig10_rolling():
         axA.plot(rec["makespan"], y, marker="|", color=col, markersize=7,
                  markeredgewidth=1.2, zorder=5)
         wwt_txt = format(int(round(rec["wwt"])), ",")
-        # place the label so its white box sits fully clear of the shaded
-        # stale-span rectangle's right edge (the shade ends at the makespan).
-        axA.text(horizon * 0.95, y, f"TWT {wwt_txt}",
-                 ha="right", va="center", fontsize=7.0, weight="bold",
+        # the label sits just past its OWN lane end when the lane is short,
+        # and right-aligned inside the panel when the lane runs the full
+        # horizon; either way it reads as that lane's outcome.
+        if rec["makespan"] < 0.62 * horizon:
+            lx, lha = rec["makespan"] + horizon * 0.025, "left"
+        else:
+            lx, lha = horizon * 0.95, "right"
+        axA.text(lx, y, f"TWT {wwt_txt}",
+                 ha=lha, va="center", fontsize=7.0, weight="bold",
                  color=INK, zorder=6,
                  bbox=dict(boxstyle="round,pad=0.16", fc=SURF, ec="none"))
         axA.text(-horizon * 0.012, y, name, ha="right", va="center",
                  fontsize=6.6, color=INK)
     axA.set_xlim(-horizon * 0.175, horizon)
-    axA.set_ylim(-0.7, 1.7)
+    axA.set_ylim(-0.45, 1.80)
     axA.set_yticks([])
     for sp in ("left",):
         axA.spines[sp].set_visible(False)
     axA.set_xlabel("business hours", fontsize=7.0)
     axA.set_xticks([0, 100, 200, 300])
     axA.tick_params(axis="x", labelsize=6.6)
-    axA.text(0, 1.62, "campus 9 · size 400 · m=0.6 · id 0102",
+    axA.text(0, 1.66, "campus 9 · size 400 · m=0.6 · id 0102",
              fontsize=6.4, color=INK, ha="left", va="center")
-    axA.set_title("(a)  Replan timeline", loc="left", fontsize=7.6, color=INK,
+    # The caption is the title; the panel carries only its tag.
+    axA.set_title("(a)", loc="left", fontsize=8.0, color=INK,
                   weight="bold", pad=6, x=-0.175)
 
     # ---- (b) outcome slope chart (arrival-only -> periodic), log-y ----------
@@ -628,12 +642,15 @@ def fig10_rolling():
                  fontsize=6.2, color=INK, ha=idha, va="bottom")
     axB.set_yscale("log")
     axB.set_ylim(FLOOR * 0.8, 20000)
+    axB.yaxis.set_major_locator(mticker.FixedLocator([10, 100, 1000, 10000]))
+    axB.yaxis.set_minor_locator(mticker.NullLocator())
+    axB.set_yticklabels(["10", "100", "1,000", "10,000"], fontsize=6.6)
     axB.set_xlim(-0.5, 1.6)
     axB.set_xticks([xa, xp])
     axB.set_xticklabels(["arrival\nonly", "periodic"], fontsize=6.6)
     axB.set_ylabel("episode TWT  (log)", fontsize=7.0)
     axB.grid(axis="y", which="major", color=GRID, linewidth=0.4)
-    axB.set_title("(b)  Outcome", loc="left", fontsize=7.6, color=INK,
+    axB.set_title("(b)", loc="left", fontsize=8.0, color=INK,
                   weight="bold", pad=6)
     save(fig, "f10_rolling")
 

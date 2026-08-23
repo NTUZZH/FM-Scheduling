@@ -46,7 +46,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 # ONE house palette: the frozen tokens of the existing figure script.
 from p5_figures import (  # noqa: E402
-    INK, MUTE, GRID, AXIS, SURF, CMAP, figsize, label_ladder,
+    INK, MUTE, GRID, AXIS, SURF, CMAP, figsize, label_ladder, save,
 )
 
 FIGDIR = ROOT / "paper" / "figures"
@@ -114,12 +114,8 @@ def set_style():
 HATCH_INK = "#9aa0a6"
 
 
-def save(fig, name, tight=False):
-    kw = dict(bbox_inches="tight", pad_inches=0.02) if tight else {}
-    fig.savefig(FIGDIR / f"{name}.pdf", **kw)
-    fig.savefig(FIGDIR / f"{name}.png", dpi=300, **kw)
-    plt.close(fig)
-    print(f"  wrote {name}.pdf + .png")
+# save() is imported from p5_figures: one writer for every figure of the paper,
+# so every file leaves at exactly the manuscript's text width.
 
 
 def style_ax(ax):
@@ -168,8 +164,8 @@ PT_SMALL, PT_BODY, PT_TAG = 6.2, 6.8, 8.0
 
 # Print-true geometry, in millimetres on the page (the figure is drawn at
 # \textwidth, so a millimetre here is a millimetre in the manuscript).
-H_MM = 84.0
-AX_BOT, AX_TOP = 29.0, 78.5          # both panels share this band
+H_MM = 76.0
+AX_BOT, AX_TOP = 21.0, 70.5          # both panels share this band
 A_X0, A_W = 18.0, 62.0               # panel (a) grid: 5 columns of 12.4 mm
 B_GUT, B_X0, B_W = 90.0, 96.5, 41.0  # panel (b) gutter, axes left, axes width
 B_NUM_X, B_VERD_X = 1.19, 1.22       # right-hand text column, in axes fractions
@@ -491,6 +487,11 @@ def fig4_map():
                      va="center", fontsize=PT_SMALL, color=INK, clip_on=False)
             axb.text(B_VERD_X, y, d["verdict"], transform=ytr, ha="left",
                      va="center", fontsize=PT_SMALL, color=INK, clip_on=False)
+    # The plotted axis is a percentage and the right-hand column is an absolute
+    # difference, so the column says which unit it carries.
+    axb.text(B_NUM_X, 1.012, "weighted units", transform=axb.transAxes,
+             ha="right", va="bottom", fontsize=PT_SMALL, style="italic",
+             color=INK, clip_on=False)
 
     axb.set_yticks([ypos[(a, k)] for a in arms for k, _, _, _ in LADDER_RULES])
     axb.set_yticklabels([n for _ in arms for _, n, _, _ in LADDER_RULES],
@@ -528,8 +529,11 @@ def fig4_map():
               label="Either family"),
         Patch(facecolor=CELL_FILL["due-date"], edgecolor=INK, linewidth=0.4,
               label="Due-date family"),
+        # a denser hatch than the cells use: the legend swatch is a few
+        # millimetres wide, and at the cells' spacing no stroke would fall
+        # inside it once the page box is set at the manuscript's text width
         Patch(facecolor="#ffffff", edgecolor=HATCH_INK, linewidth=0.4,
-              hatch="//", label="Too few instances"),
+              hatch="////", label="Too few instances"),
         Patch(facecolor=SURF, edgecolor=AXIS, linewidth=0.5,
               linestyle=(0, (1.0, 1.6)), label="No configurations"),
     ]
@@ -543,27 +547,16 @@ def fig4_map():
               linewidth=1.0, linestyle=(0, (2, 1.4)),
               label="Weighted family only when campus 2 is included"),
     ]
-    fig.legend(handles=fills, loc="lower left",
-               bbox_to_anchor=(2.0 / W, 16.5 / H_MM), ncol=len(fills),
+    # Both legend rows are centred on the canvas: the caption carries the
+    # scoping sentences, so the figure keeps only its key.
+    fig.legend(handles=fills, loc="lower center",
+               bbox_to_anchor=(0.5, 7.0 / H_MM), ncol=len(fills),
                fontsize=PT_SMALL, frameon=False, handlelength=1.5,
                handleheight=1.0, columnspacing=1.6, handletextpad=0.5)
-    fig.legend(handles=marks, loc="lower left",
-               bbox_to_anchor=(2.0 / W, 13.1 / H_MM), ncol=len(marks),
+    fig.legend(handles=marks, loc="lower center",
+               bbox_to_anchor=(0.5, 3.4 / H_MM), ncol=len(marks),
                fontsize=PT_SMALL, frameon=False, handlelength=1.5,
                handleheight=1.0, columnspacing=1.6, handletextpad=0.5)
-
-    # ---- one micro-note band ------------------------------------------------
-    note = (f"Panel (a) covers every campus except campus 2; n counts base "
-            f"instances, and a cell needs {min_cl} of them for a verdict. "
-            f"Panel (b) covers campus 2 alone, its crews resized to the "
-            f"stated percentile of each trade's weekly hours; beside each "
-            f"interval the panel prints the difference in weighted-tardiness "
-            f"units and its verdict, and the grey band spans the "
-            f"±{margin_pct[arms[0]]:.0f}% practical-equivalence margin either "
-            f"side of EDD.")
-    fig.text(2.0 / W, 2.0 / H_MM,
-             "\n".join(textwrap.wrap(note, 137)), fontsize=PT_SMALL,
-             color=INK, ha="left", va="bottom", linespacing=1.45)
 
     _check_fit(fig, reg, "f4_map")
     _check_texts(fig, "f4_map")
@@ -657,12 +650,24 @@ def figvis_effects():
     pms = [0.2, 0.5, 0.8]
     uts = [0.7, 0.9, 1.1]
 
-    fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, 120))
-    left, right = 0.108, 0.988
-    top = 0.930
-    wgap, hgap = 0.050, 0.052
-    pw = (right - left - 2 * wgap) / 3
-    ph = 0.152
+    # Print-true geometry, in millimetres on the page. The panels are sized to
+    # the data they hold rather than to a fraction of a tall canvas: at the
+    # previous height each cell carried about twice the white space it needed.
+    HV = 101.0
+    V_L, V_R = 19.5, 163.0        # generator block, left and right edges
+    V_WGAP = 8.0
+    V_PW = (V_R - V_L - 2 * V_WGAP) / 3
+    V_PH, V_HGAP = 16.0, 5.0      # generator panel height and row gap
+    V_ROW_TOP = [76.0, 55.0, 34.0]     # bottom of each generator row
+    V_EBOT, V_EH = 12.8, 12.8     # empirical strip: its own axis label and
+    #                              the key both sit under it, which needs
+    #                              about 12.5 mm of clear band
+    V_GUT = 24.0                  # right-hand gutter for its direct labels
+
+    fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, HV))
+
+    def vfrac(x, y, w, h):
+        return [x / TEXTWIDTH_MM, y / HV, w / TEXTWIDTH_MM, h / HV]
 
     # one y scale over all nine generator panels, so every cell is comparable
     vals = []
@@ -679,8 +684,8 @@ def figvis_effects():
     axes = {}
     for i, pm in enumerate(pms):
         for j, ut in enumerate(uts):
-            ax = fig.add_axes([left + j * (pw + wgap),
-                               top - (i + 1) * ph - i * hgap, pw, ph])
+            ax = fig.add_axes(vfrac(V_L + j * (V_PW + V_WGAP), V_ROW_TOP[i],
+                                    V_PW, V_PH))
             _vis_panel(ax, vis, f"gen|pm={pm:g}|u={ut:g}", VIS_ARMS[:2],
                        ylim=genlim)
             axes[(i, j)] = ax
@@ -693,23 +698,20 @@ def figvis_effects():
 
     # facet labels: columns on top, rows on the left (data labels, not titles)
     for j, ut in enumerate(uts):
-        axes[(0, j)].text(0.5, 1.09, f"target utilisation {ut:g}",
-                          transform=axes[(0, j)].transAxes, ha="center",
-                          va="bottom", fontsize=7.0, color=INK)
+        fig.text((V_L + j * (V_PW + V_WGAP) + V_PW / 2) / TEXTWIDTH_MM,
+                 (V_ROW_TOP[0] + V_PH + 1.2) / HV,
+                 f"target utilisation {ut:g}", ha="center", va="bottom",
+                 fontsize=7.0, color=INK)
     for i, pm in enumerate(pms):
-        axes[(i, 0)].text(-0.190, 0.5, f"preventive\nshare {pm:g}",
-                          transform=axes[(i, 0)].transAxes, ha="center",
-                          va="center", rotation=90, fontsize=7.0, color=INK)
-    genbot = top - 3 * ph - 2 * hgap
+        fig.text(10.4 / TEXTWIDTH_MM, (V_ROW_TOP[i] + V_PH / 2) / HV,
+                 f"preventive\nshare {pm:g}", ha="center", va="center",
+                 rotation=90, fontsize=7.0, color=INK)
 
     # ---- empirical strip ---------------------------------------------------
     # The strip keeps a right-hand gutter for the three direct labels, because
     # its own y scale is an order of magnitude smaller than the generator
     # panels' and two of its three lines sit on top of each other at zero.
-    eh = 0.132
-    ebot = 0.158
-    gutter = 0.150
-    axe = fig.add_axes([left, ebot, right - left - gutter, eh])
+    axe = fig.add_axes(vfrac(V_L, V_EBOT, V_R - V_L - V_GUT, V_EH))
     ends = _vis_panel(axe, vis, "emp|ALL", VIS_ARMS)
     axe.set_yticks([0.0, 0.5, 1.0, 1.5])
     axe.tick_params(axis="y", labelsize=6.2)
@@ -721,21 +723,25 @@ def figvis_effects():
     # direct labels at the right end: the redundant channel for every hue, with
     # the least-displacement ladder keeping the two near-zero lines apart
     lo_e, hi_e = axe.get_ylim()
-    panel_pt = eh * 120.0 * MM * 72.0
+    panel_pt = V_EH * MM * 72.0
     sep = 7.6 / panel_pt * (hi_e - lo_e)
     ends.sort(key=lambda t: t[2])
     ladder = label_ladder([e[2] for e in ends], sep)
     for (tag, xe, ye, col), ly in zip(ends, ladder):
         axe.plot([xe + 0.06, xe + 0.30], [ye, ly], color=col, lw=0.5,
                  zorder=6, clip_on=False)
-        axe.text(xe + 0.34, ly, tag, ha="left", va="center", fontsize=5.8,
+        axe.text(xe + 0.34, ly, tag, ha="left", va="center", fontsize=6.2,
                  color=INK, clip_on=False)
 
-    fig.text(0.068, top + 0.052, "Generator cells", ha="left", va="center",
+    fig.text(V_L / TEXTWIDTH_MM, (V_ROW_TOP[0] + V_PH + 6.0) / HV,
+             "Generator cells", ha="left", va="center",
              fontsize=7.0, color=INK, style="italic")
-    fig.text(0.068, ebot + eh + 0.030, "Empirical anchors, all crew multipliers",
+    # clear of the bottom generator row's tick labels, which reach about
+    # 3.4 mm below that row's axes
+    fig.text(V_L / TEXTWIDTH_MM, (V_EBOT + V_EH + 1.9) / HV,
+             "Empirical anchors, all crew multipliers",
              ha="left", va="center", fontsize=7.0, color=INK, style="italic")
-    fig.text(0.026, (ebot + top) / 2,
+    fig.text(3.2 / TEXTWIDTH_MM, (V_EBOT + V_ROW_TOP[0] + V_PH) / 2 / HV,
              "Change in mean weighted tardiness from the same arm at L = 0  (%)",
              rotation=90, ha="center", va="center", fontsize=7.0, color=INK)
 
@@ -743,14 +749,12 @@ def figvis_effects():
                       markersize=3.0, markeredgecolor=SURF,
                       markeredgewidth=0.4, label=lab)
                for _, c, lab, ls, _ in VIS_ARMS]
-    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.50, 0.046),
+    # The caption states the contrast, the control and the interval, so the
+    # figure carries the key and nothing else.
+    fig.legend(handles=handles, loc="lower center",
+               bbox_to_anchor=(0.5 * (V_L + V_R) / TEXTWIDTH_MM, 0.4 / HV),
                ncol=3, fontsize=6.2, frameon=False, handlelength=2.6)
-    fig.text(0.026, 0.014,
-             "Bands are 95% cluster-bootstrap intervals over base instances; the myopic "
-             "rules read no advance notice and are the zero line by construction.",
-             ha="left", va="bottom", fontsize=5.4, color=INK)
-    print(f"   FVIS generator y range: {genlim[0]:.1f} to {genlim[1]:.1f} %"
-          f" (bottom of generator block at {genbot:.3f})")
+    print(f"   FVIS generator y range: {genlim[0]:.1f} to {genlim[1]:.1f} %")
     save(fig, "fvis_effects")
 
     n_emp = int(vis[(vis.scope == "emp|ALL") & (vis.arm == "vispool")].n_configs.iloc[0])
@@ -784,8 +788,14 @@ def fig3_curves():
     g["u"] = g.scope.str.replace("u_target=", "", regex=False).astype(float)
     us = sorted(g.u.unique())
 
-    fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, 86))
-    ax = fig.add_axes([0.090, 0.205, 0.672, 0.775])
+    # Print-true geometry, in millimetres on the page: axes band, then the
+    # right-hand label gutter, then the axis label and the key underneath.
+    H3 = 78.0
+    C_X0, C_W = 24.5, 110.0
+    C_BOT, C_H = 15.0, 60.0
+    fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, H3))
+    ax = fig.add_axes([C_X0 / TEXTWIDTH_MM, C_BOT / H3,
+                       C_W / TEXTWIDTH_MM, C_H / H3])
     style_ax(ax)
     ax.axvspan(1.0, 1.36, color=GRID, alpha=0.55, zorder=0, linewidth=0)
 
@@ -830,12 +840,17 @@ def fig3_curves():
         ends.append((lab, float(d["mean"].iloc[-1]), col))
     ends.append(("Policy pool", float(pool.pooled_mean.iloc[-1]), CMAP["policy"]))
     ends.sort(key=lambda t: t[1])
+    # Minimum gap between label centres, derived from the panel geometry rather
+    # than guessed in decades: 3.0 mm on the page at the 6.4 pt label size, so
+    # the ladder cannot tighten when the panel height changes.
+    _y0, _y1 = ax.get_ylim()
+    sep_dec = 3.0 / C_H * np.log10(_y1 / _y0)
     ypos = {}
     prev = None
     for lab, y, col in ends:
         yy = y
-        if prev is not None and np.log10(yy) - np.log10(prev) < 0.072:
-            yy = 10 ** (np.log10(prev) + 0.072)
+        if prev is not None and np.log10(yy) - np.log10(prev) < sep_dec:
+            yy = 10 ** (np.log10(prev) + sep_dec)
         ypos[lab] = yy
         prev = yy
     # The connectors are thin grey and start clear of the last data point, so
@@ -846,8 +861,8 @@ def fig3_curves():
         ax.text(1.358, ypos[lab], lab, ha="left", va="center", fontsize=6.4,
                 color=INK, clip_on=False)
 
-    ax.text(1.18, 2.2e5, "overload\nu > 1", ha="center", va="top", fontsize=5.4,
-            color=INK, style="italic")
+    ax.text(1.18, 2.35e5, "overload\nu > 1", ha="center", va="top",
+            fontsize=6.2, color=INK, style="italic")
     # the diagnostic floors, stated as a ratio to the EDD mean at the top load
     # (the fixed family-level reference; a scope-best ratio would lean on a
     # single lucky training seed)
@@ -855,9 +870,9 @@ def fig3_curves():
     edd_mean = g[(g.method == "edd") & (g.u == top_u)]["mean"].iloc[0]
     for m in ("lpt", "random"):
         r = g[(g.method == m) & (g.u == top_u)]["mean"].iloc[0] / edd_mean
-        ax.text(1.358, ypos[dict(lpt="LPT", random="Random")[m]] * 0.72,
+        ax.text(1.358, ypos[dict(lpt="LPT", random="Random")[m]] * 0.66,
                 f"{r:.1f}× the EDD mean\nat u = {top_u:g}", ha="left", va="center",
-                fontsize=5.4, color=INK, style="italic", clip_on=False,
+                fontsize=6.2, color=INK, style="italic", clip_on=False,
                 linespacing=1.35)
 
     # The pool swatch matches the plotted line exactly: solid, with the marker
@@ -871,7 +886,9 @@ def fig3_curves():
         Patch(facecolor=MUTE, alpha=0.22, edgecolor="none",
               label="95% cluster-bootstrap interval"),
     ]
-    fig.legend(handles=handles, loc="lower left", bbox_to_anchor=(0.090, 0.010),
+    # centred on the plotted panel, immediately under its axis label
+    fig.legend(handles=handles, loc="lower center",
+               bbox_to_anchor=((C_X0 + C_W / 2) / TEXTWIDTH_MM, 1.2 / H3),
                ncol=3, fontsize=6.4, frameon=False, handlelength=2.6)
     save(fig, "f3_curves")
 
@@ -911,11 +928,20 @@ def fig6_robustness():
     st = pd.read_csv(ANA_ROB / "stability.csv")
     nr, nc = len(F6_ROWS), len(F6_COLS)
 
-    # The note is one line, so the bottom band is that line plus the legend.
-    H6 = 90.0
+    # Print-true geometry, in millimetres on the page. The matrix fills the
+    # text width (the row-label column on the left, the three strata to the
+    # right of it) and the legend is centred under it, so no band of the canvas
+    # is left blank on one side.
+    H6 = 82.0
+    LAB_W = 43.0                     # right edge of the row-label column
+    M_X0, M_X1 = 45.5, 163.5         # matrix left and right edges
+    M_BOT, M_TOP = 12.0, 72.5        # matrix band
     fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, H6))
-    ax = fig.add_axes([0.335, 0.1502, 0.592, 0.7478])
+    ax = fig.add_axes([M_X0 / TEXTWIDTH_MM, M_BOT / H6,
+                       (M_X1 - M_X0) / TEXTWIDTH_MM, (M_TOP - M_BOT) / H6])
     ax.set_xlim(0, nc); ax.set_ylim(0, nr); ax.axis("off")
+    # row labels sit in figure space, right-aligned on one shared column edge
+    lab_x = LAB_W / TEXTWIDTH_MM
 
     for i, (check, arm, rlab) in enumerate(F6_ROWS):
         yy = nr - 1 - i
@@ -931,15 +957,18 @@ def fig6_robustness():
                                    facecolor=GRADE_FILL[gi], edgecolor=INK,
                                    linewidth=0.4, zorder=2))
             # The hatch is the print-safe secondary channel for the lowest
-            # grade; it is thin and light, and every text line masks it with a
-            # patch of the cell's own fill, so no stroke crosses a glyph.
+            # grade. It is thin and light, and ONE opaque panel of the cell's
+            # own fill sits between it and the three text lines, so the hatch
+            # reads at the cell's edges, no stroke crosses a glyph, and no
+            # per-line mask eats into the cell border.
             tbox = None
             if gi == 0:
                 ax.add_patch(Rectangle((j + 0.03, yy + 0.06), 0.94, 0.88,
                                        facecolor="none", edgecolor=HATCH_INK,
                                        linewidth=0.0, hatch="/", zorder=3))
-                tbox = dict(boxstyle="square,pad=0.12",
-                            facecolor=GRADE_FILL[0], edgecolor="none")
+                ax.add_patch(Rectangle((j + 0.19, yy + 0.12), 0.62, 0.76,
+                                       facecolor=GRADE_FILL[0],
+                                       edgecolor="none", zorder=4))
             ax.text(j + 0.5, yy + 0.70, f"overlap {jac:.2f}", ha="center",
                     va="center", fontsize=6.2, color=INK, weight="bold",
                     zorder=5, bbox=tbox)
@@ -952,28 +981,24 @@ def fig6_robustness():
                     bbox=tbox)
 
     for j, (_, clab) in enumerate(F6_COLS):
-        ax.text(j + 0.5, nr + 0.08, clab, ha="center", va="bottom", fontsize=6.6,
+        ax.text(j + 0.5, nr + 0.10, clab, ha="center", va="bottom", fontsize=6.6,
                 color=INK, linespacing=1.25, clip_on=False)
     for i, (_, _, rlab) in enumerate(F6_ROWS):
-        ax.text(-0.06, (nr - 1 - i) + 0.5, rlab, ha="right", va="center",
-                fontsize=6.6, color=INK, clip_on=False)
+        fig.text(lab_x, (M_BOT + (M_TOP - M_BOT) * ((nr - 1 - i) + 0.5) / nr) / H6,
+                 rlab, ha="right", va="center", fontsize=6.6, color=INK)
 
     handles = [Patch(facecolor=GRADE_FILL[2], edgecolor=INK, linewidth=0.4,
                      label="set holds (overlap ≥ 0.90)"),
                Patch(facecolor=GRADE_FILL[1], edgecolor=INK, linewidth=0.4,
                      label="set narrows (0.50 ≤ overlap < 0.90)"),
                Patch(facecolor=GRADE_FILL[0], edgecolor=INK, linewidth=0.4,
-                     hatch="/", label="set changes (overlap < 0.50)")]
-    fig.legend(handles=handles, loc="lower left", bbox_to_anchor=(0.020, 0.078),
-               ncol=3, fontsize=5.4, frameon=False, handlelength=1.6,
-               handleheight=1.1, columnspacing=1.4)
-
-    # The caption carries the construction and the reading of a low rank
-    # correlation, so the figure keeps only what names the three strata.
-    note = ("Strata: the four campuses that carry the verdict, the held-out "
-            "transfer campus, and the chronically overloaded campus.")
-    fig.text(0.020, 0.022, note, fontsize=5.4, color=INK, ha="left",
-             va="bottom", linespacing=1.5)
+                     hatch="///", label="set changes (overlap < 0.50)")]
+    # centred under the matrix; the three strata are named by the column
+    # headers, so the figure carries no note repeating them.
+    fig.legend(handles=handles, loc="lower center",
+               bbox_to_anchor=(0.5 * (M_X0 + M_X1) / TEXTWIDTH_MM, 0.030),
+               ncol=3, fontsize=6.2, frameon=False, handlelength=1.6,
+               handleheight=1.1, columnspacing=2.0)
     save(fig, "f6_robustness")
 
     print("   F6 grades:",
