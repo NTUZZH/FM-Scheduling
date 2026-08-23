@@ -293,7 +293,8 @@ taken from these.
   `mean_diff` to 9e-13 and the instance-only arm reproduces the released
   bounds on the released stream, so the change is the seed level and not
   the estimator. With K=10 (K=3 for the curriculum-v1 pool) the widened
-  interval is a lower bound on seed uncertainty.
+  interval should be interpreted cautiously and may not capture the full
+  training-seed uncertainty.
 - **Freshness of Eval-B against the released corpus** (same overlap
   script). 0 of 227 final empirical instances share a work order with a
   train-split v1.0 window, so no training leakage; 101 of 227 share with a

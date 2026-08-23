@@ -63,9 +63,9 @@ What the method cannot do
 -------------------------
 Ten training seeds (three for ``v1_pool``) are a small sample, and a bootstrap
 resamples only the seeds that exist.  The seed level here is therefore coarse:
-the two-level interval is a lower bound on seed uncertainty, not a precise
-estimate of it, and it says nothing about seed variation the trained set never
-exhibited.  The report states this in the same words.
+the two-level interval should be interpreted cautiously, may not capture the
+full training-seed uncertainty, and says nothing about seed variation the
+trained set never exhibited.  The report states this in the same words.
 
 Inputs
 ------
@@ -661,11 +661,11 @@ def write_report(path: Path, tab: pd.DataFrame, n_boot: int, seed: int) -> Path:
       "nominal 95%. A bootstrap also resamples only the seeds that exist, so "
       "it cannot represent training outcomes the trained set never produced.")
     A("")
-    A("The two-level interval is therefore a lower bound on seed uncertainty "
-      "rather than a precise estimate of it. It shows that the released "
-      "intervals understate total uncertainty and by roughly how much; it does "
-      "not certify the size of the understatement. Removing that limit needs "
-      "more training seeds, not a different estimator.")
+    A("The two-level interval should therefore be interpreted cautiously and "
+      "may not capture the full training-seed uncertainty. It shows that the "
+      "released intervals understate total uncertainty and by roughly how "
+      "much; it does not certify the size of the understatement. Removing "
+      "that limit needs more training seeds, not a different estimator.")
     A("")
 
     A("## Every cell")

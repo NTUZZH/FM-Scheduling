@@ -233,8 +233,9 @@ two-level bootstrap resamples training seeds and instance clusters jointly,
 on the generator track the intervals widen by a median factor of 2.7 and
 nine of the 33 cells move off a definite verdict, eight of them from worse
 to inconclusive. With ten seeds (three for the curriculum-v1 pool) the seed
-level is resampled from a small set, so the widened interval is a lower
-bound on seed uncertainty rather than a precise estimate of it.
+level is resampled from a small set, so the widened interval should be
+interpreted cautiously and may not capture the full training-seed
+uncertainty.
 
 Also disclosed with (1): no work order of the final evaluation appears in
 any window a policy trained on (0 of 227 instances share with a train-split
