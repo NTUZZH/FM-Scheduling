@@ -8,8 +8,9 @@ Preprint (earlier version) can be accessed here: http://dx.doi.org/10.2139/ssrn.
 
 It contains, for reuse and verification:
 
-- **Benchmark instances** (`data/instances.tar.zst`): 3,186 real-data replay
-  instances and 1,800 calibrated generator instances (4,986 total) built from
+- **Benchmark instances** (`data/instances.tar.zst`): 3,186 timestamp-ordered
+  empirical-track instances and 1,800 calibrated generator instances (4,986
+  total) built from
   the public FMUCD work-order database, in a documented JSON schema.
 - **The instance generator** with per-campus fitted parameter packs
   (`src/fmwos/generator.py`, `results/p2_generator/`).
@@ -44,7 +45,7 @@ CC BY 4.0. The exact distribution file used has SHA-256
 conda env create -f environment.yml && conda activate fmwos
 # 1. download FMUCD to data/raw/FMUCD.csv (SHA-256 above must match)
 python scripts/p0_profile.py                    # cleaning audit + profiling
-python scripts/p1_instances.py                  # calibration + replay track
+python scripts/p1_instances.py                  # calibration + empirical track
 python scripts/p2_generator.py                  # generator track
 PYTHONPATH=src python scripts/p2_e1.py          # E1 static (sharded, resumable)
 PYTHONPATH=src python -m fmwos.train --seed 301 --curriculum v2  # PPO
