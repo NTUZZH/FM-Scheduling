@@ -266,6 +266,20 @@ def verdict_rule_sentences():
             % (legend, margin_rule_phrase()))
 
 
+def verdict_rule_pointer():
+    """Marker legend with a pointer to the headline table's full definition.
+
+    The three family tables sit within three pages of each other and the
+    full marker/margin definition is identical in each, so the second and
+    third tables carry the legend plus a pointer instead of repeating the
+    definition (referee note, 2026-08-25: the repeated notes made the
+    results pages read dense)."""
+    legend = ", ".join("%s %s" % (marker(v), name) for v, name in MARK_NAME[:-1])
+    legend += " and %s %s" % (marker(MARK_NAME[-1][0]), MARK_NAME[-1][1])
+    return ("Verdict markers (%s) and the margin are defined in the note to "
+            "Table~\\ref{tab:headline}." % legend)
+
+
 def verdicts_seen():
     """Verdicts that actually reach a cell of either table."""
     seen = set()
@@ -431,7 +445,7 @@ def table_rules_family():
         "configuration before the pairing. Rolling CP-SAT pairs on a "
         "subsample and is reported separately, so it is not a row here. Lower "
         "TWT is better."
-        % (verdict_rule_sentences(), f"{n_emp:,}", DAGGER_NOTE))
+        % (verdict_rule_pointer(), f"{n_emp:,}", DAGGER_NOTE))
     L += note_par(note)
     write("t_rules_family", L)
 
@@ -564,7 +578,7 @@ def table_learning_family():
         "pairing, so repeated training runs count once. At the most contended "
         "scope of each block the pool mean itself spans, at %s and at %s, %s. "
         "Lower TWT is better."
-        % (verdict_rule_sentences(), DAGGER_NOTE, hard[0], hard[1], disp))
+        % (verdict_rule_pointer(), DAGGER_NOTE, hard[0], hard[1], disp))
     L += note_par(note, env="tabular*")
     write("t_learning_family", L)
 
