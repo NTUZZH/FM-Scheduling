@@ -98,4 +98,8 @@ Tests (plain python): `PYTHONPATH=src python tests/<file>.py`.
 
 ## Citation
 
-A citation entry will be added upon publication.
+Zhang, Z., Ku Chia, T.P., Tang, J. An open CMMS-derived benchmark for
+building-maintenance work-order dispatching: rules, optimisation, and
+learning. Manuscript under peer review.
+
+A full entry with the journal and DOI will be added upon publication.
