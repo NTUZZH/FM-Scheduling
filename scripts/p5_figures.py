@@ -19,7 +19,8 @@ analysis; this script now builds f1, f2 and f5 only.
 
   conda activate fjsp && python scripts/p5_figures.py [f1 f2 f5]
 """
-import sys, math
+import os
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
@@ -33,7 +34,11 @@ import matplotlib.ticker as mticker
 from pathlib import Path
 
 ROOT = str(Path(__file__).resolve().parents[1])
-FIGDIR = f"{ROOT}/paper/figures"
+# Where every figure file is written. The default is the manuscript's own
+# figure directory; set FMWOS_FIGDIR to write a rebuild somewhere else (a
+# second build directory, or a scratch directory for a checked comparison)
+# without touching paper/figures.
+FIGDIR = os.environ.get("FMWOS_FIGDIR", f"{ROOT}/paper/figures")
 
 sys.path.insert(0, f"{ROOT}/src")
 from fmwos.io import normalize_method_column  # noqa: E402
@@ -419,27 +424,10 @@ def fig2_static():
     axA.set_xticklabels(["0.1", "1", "10", "100", "1,000"], fontsize=6.4)
     axA.grid(axis="x", which="major", color=GRID, linewidth=0.5)
     axA.set_axisbelow(True)
-    # tier brackets
-    # tier labels sit just above the top bar of their tier, which the order
-    # above fixes: exact/near-exact = rows 0-2, dispatching rules = rows 3-7,
-    # diagnostic floor = rows 8-9 (row index counted from the top). The wording
-    # is the caption's and the body's: "dispatching rules", "diagnostic floors".
-    _row = lambda m: ypos[order.index(m)]
-    axA.text(0.14, _row("cpsat300") + 0.55, "exact / near-exact", fontsize=6.2, color=INK, style="italic")
-    axA.text(15, _row("wmdd") + 0.55, "dispatching rules", fontsize=6.2, color=INK, style="italic")
-    # raised well clear of the random-ordering bar's own value label, and kept
-    # right of the EDD bar's end so the extra height costs no overlap
-    axA.text(135, _row("random") + 0.42, "diagnostic floor", fontsize=6.2,
-             color=INK, style="italic", va="bottom")
-    # GA beats cpsat60 annotation. The caption states the count; the figure
-    # only points at the bar the claim is about.
-    # leader lands INSIDE the GA bar (not at its tip) so the curve stays well
-    # clear of the '4.3' value label sitting just right of the bar end.
-    axA.annotate("GA improves on CP-SAT 60 s here",
-                 xy=(gaps["ga"]*0.55, ypos[order.index("ga")]),
-                 xytext=(9, _row("cpsat60") + 0.9), fontsize=6.2, color=INK, ha="left", va="center",
-                 arrowprops=dict(arrowstyle="-", color=MUTE, lw=0.6,
-                                 connectionstyle="arc3,rad=-0.2"))
+    # The only in-plot text is the value at each bar end: the axis is
+    # logarithmic, so a reader cannot recover the value from the bar length.
+    # The method tiers and the GA-versus-CP-SAT comparison are stated in the
+    # caption, where they cost the panel nothing.
     # The caption is the title and it carries the instance count, so the panel
     # carries only its tag.
     axA.set_title("(a)", loc="left", fontsize=8.0, color=INK, weight="bold",
@@ -453,37 +441,25 @@ def fig2_static():
     LAB_B = dict(PRETTY); LAB_B["edd"] = "EDD / pFIFO"
     axB.set_xscale("log"); axB.set_yscale("log")
     axB.set_xlim(0.25, 12000); axB.set_ylim(0.1, 1200)
+    dots = {}
     for m in order_b:
-        axB.scatter(lat[m], gaps[m], s=42, color=suite_color(m), edgecolor=SURF,
-                    linewidth=0.9, zorder=4)
-    # The six rule dots this panel draws (seven rules, with pFIFO sharing EDD's
-    # dot) answer inside one factor of two in latency, so
-    # their labels cannot all sit at their own marker height: WMDD and ATC are
-    # 0.13 decades apart and would overprint. Each label therefore keeps its own
-    # x (just right of its dot) and takes the least-displaced height that leaves
-    # a readable gap to its neighbours, with a leader in the method's own colour
-    # tying it back to its dot. Labels themselves are black.
-    RULES_B = ["wmdd", "atc", "wspt", "edd", "random", "lpt"]
-    MINSEP = 0.30          # decades between label centres at this panel height
-    _rank = sorted(RULES_B, key=lambda m: gaps[m])
-    LADDER = dict(zip(_rank, (10 ** v for v in label_ladder(
-        [math.log10(gaps[m]) for m in _rank], MINSEP))))
-    # one shared column for the six labels: left edges align, and every leader
-    # is long enough to be seen, so no label can be read against a neighbour's dot
-    XCOL = max(lat[m] for m in RULES_B) * 1.65
-    for m in RULES_B:
-        axB.annotate(LAB_B.get(m, m), xy=(lat[m], gaps[m]),
-                     xytext=(XCOL, LADDER[m]), textcoords="data",
-                     fontsize=6.2, color=INK, ha="left", va="center", zorder=5,
-                     arrowprops=dict(arrowstyle="-", color=suite_color(m),
-                                     lw=0.8, shrinkA=1.0, shrinkB=3.5))
-    # the three search-based schedulers are far apart: plain adjacent labels
-    OFF_S = {"ga": (7, 0, "left", "center"),
-             "cpsat60": (7, 0, "left", "center"),
-             "cpsat300": (-7, 0, "right", "center")}
-    for m, (dx, dy, ha, va) in OFF_S.items():
-        axB.annotate(LAB_B.get(m, m), (lat[m], gaps[m]), textcoords="offset points",
-                     xytext=(dx, dy), fontsize=6.2, color=INK, ha=ha, va=va)
+        dots[m] = axB.scatter(lat[m], gaps[m], s=42, color=suite_color(m),
+                              edgecolor=SURF, linewidth=0.9, zorder=4)
+    # Marker colour is what identifies a method here, so a legend says so. The
+    # six rule dots answer inside one factor of two in latency and stand 0.13
+    # decades apart at their closest, too tight for any label placed at its own
+    # marker. The legend takes the panel's empty upper-right quadrant: the rules
+    # sit at the left edge and the three search-based schedulers along the
+    # bottom, so nothing is covered.
+    # legend order = the panel (a) bar order read from the worst rule up, so the
+    # two panels are read the same way round.
+    leg_b = order_b[::-1]
+    axB.legend(handles=[dots[m] for m in leg_b],
+               labels=[LAB_B.get(m, m) for m in leg_b],
+               loc="upper right", ncol=2, frameon=False, fontsize=6.2,
+               labelcolor=INK, scatterpoints=1, handlelength=1.0,
+               handletextpad=0.45, columnspacing=1.0, labelspacing=0.45,
+               borderaxespad=0.3, borderpad=0.0)
     axB.set_xlabel("Decision latency per instance  (ms, log)", fontsize=6.9)
     axB.set_ylabel("Mean gap to best-known TWT  (log)", fontsize=6.9)
     # plain decimal tick labels here too, for the same print-size reason
@@ -494,21 +470,8 @@ def fig2_static():
     axB.yaxis.set_minor_locator(mticker.NullLocator())
     axB.set_yticklabels(["0.1", "1", "10", "100", "1,000"], fontsize=6.4)
     axB.grid(True, which="major", color=GRID, linewidth=0.5)
-    # guide regions
-    axB.text(0.7, 0.16, "fast, coarse", fontsize=6.2, color=INK, style="italic")
-    axB.text(1600, 300, "slow, exact", fontsize=6.2, color=INK, style="italic", ha="center")
-    # the trade-off guide starts to the right of the rule cluster, so it never
-    # crosses a direct label
-    _FR = ((2.5, 700.0), (3500.0, 0.3))
-    axB.annotate("", xy=_FR[1], xytext=_FR[0],
-                 arrowprops=dict(arrowstyle="-", color=GRID, lw=0.8))
-    # rotate the guide's label by the line's angle ON THE PAGE, measured through
-    # the axes transform, so it stays parallel whatever the panel's aspect is
-    (_x0, _y0), (_x1, _y1) = (axB.transData.transform(p) for p in _FR)
-    axB.text(55, 8, "quality\u2013latency\ntrade-off", fontsize=6.2, color=INK,
-             style="italic", ha="center", va="center",
-             rotation=math.degrees(math.atan2(_y1 - _y0, _x1 - _x0)),
-             rotation_mode="anchor")
+    # The two axes already say which corner is fast and which is exact, so the
+    # panel carries method names and nothing else.
     axB.set_title("(b)", loc="left", fontsize=8.0, color=INK, weight="bold",
                   pad=6)
     save(fig, "f2_static")
@@ -775,10 +738,10 @@ def fig4_map():
     fig.legend(handles=leg, loc="upper left", ncol=1, fontsize=6.4,
                bbox_to_anchor=(x0 - 0.012, 0.700), frameon=False,
                labelspacing=0.55, handletextpad=0.6)
-    note = (f"Cell colour = lowest mean TWT among {{EDD, ATC, WSPT, Policy}} over all "
+    note = (f"Cell color = lowest mean TWT among {{EDD, ATC, WSPT, Policy}} over all "
             f"instances in the cell; Policy = per-instance mean of the {len(POL_SEEDS)} "
-            "seeds, never a best-of. The winner is labelled with its mean TWT; methods "
-            "within 1% of the best share the top-tier colour. \u2020 marks cells where the "
+            "seeds, never a best-of. The winner is labeled with its mean TWT; methods "
+            "within 1% of the best share the top-tier color. \u2020 marks cells where the "
             "five-way match that adds Rolling CP-SAT (8 instances per campus-size "
             "cell) ends in a top-tier tie instead. Policy never wins a cell outright.")
     fig.text(x0, 0.415, "\n".join(textwrap.wrap(note, 52)), fontsize=5.9,
@@ -867,15 +830,22 @@ def fig5_transfer():
         ax = fig.add_axes([left + i * (width + gapw), bot, width, height])
         style_ax(ax)
         ypos = np.arange(nrow)[::-1]
-        # every number is printed to the right of its row, so the axis is
-        # widened until the longest label fits rather than flipping labels to
-        # the left, where they would collide with the method names
-        # one decimal for every value label in a panel, so the column reads as
-        # one column rather than as three formats
-        def _txt(r):
-            return f"{r['mid']:.1f}" + (
-                f"  {r['k']}/{r['n']}" if r["kind"] == "pool" and r["n"] > 1
-                else "")
+        # every label is printed to the right of its row, so the axis is
+        # widened until the longest one fits rather than flipping labels to
+        # the left, where they would collide with the method names.
+        # WHICH labels a panel prints depends on its axis. The transfer panel's
+        # axis is linear and unbroken, so a marker's position IS its value and
+        # printing the value again adds nothing; its only label is the seed
+        # count, which no mark can carry. The overload panel's axis is broken,
+        # so a position on the compressed side cannot be read off the ticks and
+        # the value is printed as well, to one decimal throughout so the column
+        # reads as one column rather than as three formats.
+        def _txt(r, _i=i):
+            count = (f"{r['k']}/{r['n']}"
+                     if r["kind"] == "pool" and r["n"] > 1 else "")
+            if _i == 0:
+                return count
+            return f"{r['mid']:.1f}" + (f"  {count}" if count else "")
         dmax = max(max(r["hi"], r["mid"]) for r in rows)
         brk = F5_BREAK.get(i)
         if brk is None:
@@ -892,15 +862,27 @@ def fig5_transfer():
                     return F5_LEFTF * v / _b
                 return (F5_LEFTF + F5_GAPF
                         + (1.0 - F5_LEFTF - F5_GAPF) * (v - _b) / (_x - _b))
-        # room for the value labels, measured from the labels themselves; a
-        # label that would land inside the break gap is pushed past it
+        # room for the labels, measured from the labels themselves; a label that
+        # would land inside the break gap is pushed past it
         def _tx(r):
             x = T(max(r["hi"], r["mid"])) + 0.022
             if brk is not None and F5_LEFTF - 0.004 < x < F5_LEFTF + F5_GAPF:
                 x = F5_LEFTF + F5_GAPF + 0.008
             return x
+        labelled = [r for r in rows if _txt(r)]
+        # The transfer panel prints three seed counts and nothing else, so they
+        # take ONE x and read as a column. The overload panel prints a label on
+        # every row, so each keeps the same gap past its own interval end.
+        if i == 0:
+            xcol = max(_tx(r) for r in labelled)
+
+            def _lx(_r, _c=xcol):
+                return _c
+        else:
+            _lx = _tx
         charw = 3.1 / (width * TEXTWIDTH_MM / 25.4 * 72.0)   # one digit at 6.2 pt
-        xhi = max(_tx(r) + charw * len(_txt(r)) for r in rows) + 0.012
+        xhi = max([_tx(r) for r in rows]
+                  + [_lx(r) + charw * len(_txt(r)) for r in labelled]) + 0.012
         # the margin band: a rule is in the set when its whole interval is inside
         ax.axvspan(0, T(margin_pct), color=BAND, zorder=0, linewidth=0)
         ax.axvline(T(margin_pct), color=BAND_EDGE, lw=0.7, zorder=1)
@@ -921,8 +903,9 @@ def fig5_transfer():
                     markersize=4.0 if r["kind"] == "rule" else 3.4, zorder=6,
                     color=col if filled else SURF, markeredgecolor=col,
                     markeredgewidth=0.9, linestyle="none")
-            ax.text(_tx(r), y, _txt(r), ha="left", va="center", fontsize=6.2,
-                    color=INK, zorder=8)
+            if _txt(r):
+                ax.text(_lx(r), y, _txt(r), ha="left", va="center",
+                        fontsize=6.2, color=INK, zorder=8)
         ax.set_ylim(-0.7, nrow - 0.3)
         ax.set_xlim(-0.03, xhi)
         ax.set_yticks(ypos)
@@ -1052,7 +1035,7 @@ def fig6_sensitivity():
     save(fig, "f6_sensitivity", tight=False, width_mm=88)
 
 # ============================================================================
-MAIN = {"f1": fig1_pipeline, "f2": fig2_static, "f5": fig5_transfer}
+MAIN = {"f2": fig2_static, "f5": fig5_transfer}
 # The revision moved three figures to scripts/r4_figures.py, which reads the
 # definitive final-evaluation analysis instead of the development sweep. Two of
 # them write the SAME file names as the functions kept below for reference, so
@@ -1062,6 +1045,14 @@ if __name__ == "__main__":
     set_style()
     which = sys.argv[1:] or list(MAIN)
     for k in which:
+        if k == "f1":
+            # The pipeline schematic is now a TikZ source
+            # (paper/figures/f1_pipeline.tex, compiled with tectonic);
+            # fig1_pipeline() is kept above for reference only, and running it
+            # would overwrite the manuscript's figure with the retired draft.
+            raise SystemExit(
+                "f1 is drawn from paper/figures/f1_pipeline.tex (tectonic); "
+                "this script no longer builds it.")
         if k in SUPERSEDED:
             raise SystemExit(
                 f"{k} is now built by scripts/r4_figures.py "

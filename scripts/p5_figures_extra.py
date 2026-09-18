@@ -7,10 +7,9 @@ f9_training  what training discriminates (single col, 2 panels)
 f10_rolling  replan on a clock          (full text width, 2 panels)
 
 Style is inherited verbatim from scripts/p5_figures.py (Times-serif, hairline
-axes, direct labels); as in scripts/r4_figures.py every text element is black
-and colour is carried to its label by a short leader rather than by coloured
-type.  Every plotted value comes from a results/ file or from the cleaned
-corpus itself:
+axes); every text element is black, a legend states what a colour means, and a
+direct label is reserved for a per-item identity a legend cannot carry.  Every
+plotted value comes from a results/ file or from the cleaned corpus itself:
   f7 : results/p0_profile/{arrivals,per_campus,trades}.csv + labor_hist.csv
   f8 : the full-corpus priority profile recomputed here from the cleaned v1.1
        corpus (see full_corpus_priority_profile), cross-checked against the
@@ -30,14 +29,13 @@ import pandas as pd
 import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle, Patch
 import matplotlib.ticker as mticker
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from p5_figures import (  # noqa: E402
-    set_style, save, style_ax, figsize, label_ladder, CMAP, PRETTY,
+    set_style, save, style_ax, figsize, CMAP, PRETTY,
     INK, INK2, MUTE, GRID, AXIS, SURF, fmt_wwt, mcol, pastel,
 )
 
@@ -187,10 +185,11 @@ def fig7_data():
     g = ar6.groupby(["UniversityID", "month"])["rows"].sum().reset_index()
     g["yr"] = g["month"].str.slice(0, 4).astype(int) + \
         (g["month"].str.slice(5, 7).astype(int) - 1) / 12.0
+    lines = {}
     for c in SCHEDULABLE:
         s = g[g.UniversityID == c].sort_values("yr")
-        axA.plot(s.yr, s.rows, "-", color=CAMP_COL[c], lw=0.9, alpha=0.95,
-                 zorder=3, solid_capstyle="round")
+        lines[c], = axA.plot(s.yr, s.rows, "-", color=CAMP_COL[c], lw=0.9,
+                             alpha=0.95, zorder=3, solid_capstyle="round")
     axA.set_yscale("log")
     axA.set_ylim(0.7, 40000)
     axA.set_xlim(2002, 2021.9)
@@ -199,36 +198,16 @@ def fig7_data():
     axA.set_yticks([1, 10, 100, 1000, 10000])
     axA.set_yticklabels(["1", "10", "100", "1k", "10k"], fontsize=6.2)
     axA.grid(axis="y", which="major", color=GRID, linewidth=0.4)
-    # Direct labels, one per curve. Every tag is anchored where its OWN curve
-    # runs clear of the others, and its leader is a short solid vertical stub in
-    # the campus's colour: no two leaders meet, and none crosses another
-    # campus's line. Labelling at the right-hand ends instead would fan six
-    # leaders out of one point, because four campuses plateau within a factor
-    # of two of each other and every series closes on a partial-month drop.
-    # (year on the curve, label height, side)
-    TAGS = {5: (2005.5, 6500.0, "up"), 10: (2018.5, 27000.0, "up"),
-            9: (2010.5, 48.0, "up"), 1: (2014.2, 95.0, "up"),
-            2: (2017.0, 170.0, "up"), 12: (2020.7, 620.0, "down")}
-    for c, (xa, ylab, side) in TAGS.items():
-        s = g[g.UniversityID == c].sort_values("yr")
-        i = int((s.yr - xa).abs().values.argmin())
-        xf, yf = float(s.yr.iloc[i]), float(s.rows.iloc[i])
-        # thin dark stub with a dot on the curve: a leader in the campus
-        # colour would read as one more spike of a spiky series, and a mid-grey
-        # one would read as campus 1's own line
-        axA.plot([xf], [yf], marker="o", markersize=2.0, color=CAMP_COL[c],
-                 markeredgecolor=SURF, markeredgewidth=0.4, zorder=7)
-        if side == "up":
-            axA.plot([xf, xf], [yf * 1.35, ylab * 0.80], color=INK2, lw=0.45,
-                     solid_capstyle="butt", zorder=6)
-            va = "bottom"
-        else:
-            axA.plot([xf, xf], [yf * 0.74, ylab * 1.30], color=INK2, lw=0.45,
-                     solid_capstyle="butt", zorder=6)
-            va = "top"
-        axA.text(xf, ylab, f"c{c}", color=INK, fontsize=6.2, ha="center",
-                 va=va, weight="bold", zorder=7,
-                 path_effects=[pe.withStroke(linewidth=2.2, foreground=SURF)])
+    # Line colour is what identifies a campus, so a legend says so. It takes the
+    # top-left corner, where no series reaches: nothing on record exceeds two
+    # thousand orders a month before 2012, and the two campuses that later climb
+    # past that do so on the right-hand half of the axis.
+    axA.legend(handles=[lines[c] for c in SCHEDULABLE],
+               labels=[f"c{c}" for c in SCHEDULABLE],
+               loc="upper left", ncol=2, frameon=False, fontsize=6.2,
+               labelcolor=INK, handlelength=1.1, handletextpad=0.4,
+               columnspacing=1.0, labelspacing=0.30, borderaxespad=0.25,
+               borderpad=0.0)
     axA.set_ylabel("work orders / month  (log)", fontsize=6.9)
     # The caption is the title; each panel carries only its tag.
     axA.set_title("(a)", loc="left", fontsize=8.0, color=INK, weight="bold",
@@ -266,7 +245,7 @@ def fig7_data():
     axB.yaxis.set_major_formatter(
         mticker.FuncFormatter(lambda v, p: f"{v/1000:.0f}k" if v >= 1000 else "0"))
     axB.tick_params(axis="y", labelsize=6.2)
-    axB.set_xlabel("labour hours  (log)", fontsize=6.9)
+    axB.set_xlabel("labor hours  (log)", fontsize=6.9)
     axB.set_ylabel("work orders", fontsize=6.9)
     axB.set_title("(b)", loc="left", fontsize=8.0, color=INK, weight="bold",
                   pad=5)
@@ -308,8 +287,9 @@ def fig7_data():
                   pad=5)
 
     # ---- (d) trade mix (top 8 + other) --------------------------------------
-    # code as the (short) y-tick; description + share at the bar end, so the
-    # long trade names never reach back into panel (c).
+    # code as the (short) y-tick; the trade name at the bar end, so the long
+    # names never reach back into panel (c). The share is not printed: the x
+    # axis is linear and gridded, so the bar length already carries it.
     style_ax(axD)
     tot = float(tr.rows.sum())
     top = tr.sort_values("rows", ascending=False).head(8)
@@ -328,12 +308,12 @@ def fig7_data():
         c = "#e4e8ec" if code == "other" else "#c3cbd3"
         axD.barh(y, sh * 100, height=0.68, color=c,
                  edgecolor="#6f7780", linewidth=0.5, zorder=3)
-        lab = f"{desc}  {sh*100:.0f}%" if desc else f"{sh*100:.0f}%"
-        axD.text(sh * 100 + 1.1, y, lab, va="center", ha="left",
-                 fontsize=6.2, color=INK)
+        if desc:
+            axD.text(sh * 100 + 1.1, y, desc, va="center", ha="left",
+                     fontsize=6.2, color=INK)
     axD.set_yticks(ypos)
     axD.set_yticklabels([r[0] for r in rows_], fontsize=6.2, color=INK)
-    axD.set_xlim(0, 68)
+    axD.set_xlim(0, 58)
     axD.set_xticks([0, 10, 20, 30])
     axD.set_xticklabels(["0", "10", "20", "30"], fontsize=6.2)
     axD.set_ylim(-0.6, len(rows_) - 0.4)
@@ -373,11 +353,15 @@ def fig8_priority():
     # fastest-closing label on top, so the panel reads down the urgency order
     ypos = np.arange(len(c2))[::-1]
     # room for the bar-end annotation, measured from the data rather than frozen
-    xmax = float(dur.max()) * 1.45
+    xmax = float(dur.max()) * 1.38
+    # The close time itself is not printed: the axis is linear and gridded, so
+    # the bar length carries it. The assigned class cannot be read off any axis,
+    # so it is printed, in ONE column at a fixed x clear of the longest bar.
+    xclass = float(dur.max()) * 1.12
     for y, d, k in zip(ypos, dur, klass):
         axA.barh(y, d, height=0.55, color=C2_FILL, edgecolor=C2_EDGE,
                  linewidth=0.5, zorder=3)
-        axA.text(d + 0.022 * xmax, y, f"{d:.1f} d     class P{k}",
+        axA.text(xclass, y, f"class P{k}",
                  va="center", ha="left", fontsize=6.2, color=INK, zorder=4)
     axA.set_yticks(ypos)
     axA.set_yticklabels([f"{lab}\nn = {n:,}" for lab, n in zip(labels, nrows)],
@@ -396,36 +380,29 @@ def fig8_priority():
     style_ax(axB)
     codes, durs = {}, {}
     # colour is a non-text mark here: campus 1 recessive grey, campus 12 in the
-    # focal green; the tag beside each line is black and a short leader in the
-    # line's own colour ties it to its series.
-    SERIES = [(1, MUTE, 1.0, 3.2, 0.9, "Campus 1", "last", (1.2, 3.6)),
-              (12, ROLL_TEAL, 1.7, 4.2, 1.0, "Campus 12", "first", (2.2, 5.2))]
-    for camp, col, lw, ms, alpha, tag, anchor, (dx, dy) in SERIES:
+    # focal green, and a legend says which is which. The legend names the two
+    # campuses and nothing more: the x axis IS the raw priority code, and the
+    # two rank correlations are quoted in the caption.
+    SERIES = [(1, MUTE, 1.0, 3.2, 0.9, "campus 1"),
+              (12, ROLL_TEAL, 1.7, 4.2, 1.0, "campus 12")]
+    curves = []
+    for camp, col, lw, ms, alpha, tag in SERIES:
         s = cm[(cm.campus == camp) & (cm.rule == "r5c")].copy()
         s["code"] = s.raw_value.astype(float)
         s = s.sort_values("code")
         codes[camp] = s.code.to_numpy(dtype=float)
         durs[camp] = s.median_cm_duration_days.to_numpy(dtype=float)
-        rho = float(s.spearman_rho.iloc[0])
-        axB.plot(s.code, s.median_cm_duration_days, "-o", color=col, lw=lw,
-                 markersize=ms, markeredgecolor=SURF, markeredgewidth=0.5,
-                 alpha=alpha, zorder=3 if camp == 1 else 5)
-        i = -1 if anchor == "last" else 0
-        xe, ye = float(s.code.iloc[i]), float(s.median_cm_duration_days.iloc[i])
-        # leader in the series colour, label in black: the r4 direct-label rule
-        axB.plot([xe, xe + dx], [ye, ye + dy], color=col, lw=0.6, zorder=4)
-        # literal rho rather than mathtext: the serif face carries the glyph, so
-        # the figure stays in one Times family (mathtext would embed STIX). The
-        # sign is a true minus, matching the plus of the other series.
-        axB.text(xe + dx + 0.5, ye + dy,
-                 f"{tag}   ρ = {rho:+.2f}".replace("-", "−"),
-                 fontsize=6.2, color=INK, ha="left", va="center", zorder=6)
-    # campus 12's own codes, direct-labelled: the caption's claim is about which
-    # code closes fastest, so the reader must be able to read it off the panel.
-    # All four sit on the same side of the line, so the row reads as one row.
-    for xc, yc in zip(codes[12], durs[12]):
-        axB.text(xc, yc + 3.0, f"{int(xc)}", fontsize=6.2, color=INK,
-                 ha="center", va="bottom", zorder=6)
+        ln, = axB.plot(s.code, s.median_cm_duration_days, "-o", color=col, lw=lw,
+                       markersize=ms, markeredgecolor=SURF, markeredgewidth=0.5,
+                       alpha=alpha, zorder=3 if camp == 1 else 5)
+        curves.append((ln, tag))
+    # top-left corner: campus 1 climbs from the bottom left and campus 12 runs
+    # along the right-hand half, so the corner is empty in both series.
+    axB.legend(handles=[ln for ln, _ in curves],
+               labels=[tag for _, tag in curves],
+               loc="upper left", frameon=False, fontsize=6.2, labelcolor=INK,
+               handlelength=1.6, handletextpad=0.5, labelspacing=0.40,
+               borderaxespad=0.3, borderpad=0.0)
     all_codes = np.concatenate([codes[1], codes[12]])
     all_durs = np.concatenate([durs[1], durs[12]])
     xlo, xhi = float(all_codes.min()), float(all_codes.max())
@@ -477,8 +454,8 @@ def fig9_training():
     axA.set_ylim(408, 426)
     axA.set_yticks([410, 415, 420, 425])
     axA.tick_params(axis="y", labelsize=6.2)
-    axA.text(595, 411.8, "plateau: all variants 409–411", fontsize=6.2,
-             color=INK, ha="right", va="bottom", style="italic")
+    # The shaded band and the ▾ markers are defined in the caption, so neither
+    # panel carries a sentence of its own.
     axA.set_ylabel("dev TWT", fontsize=6.9)
     axA.set_title("(a)", loc="left", fontsize=8.0, color=INK, weight="bold",
                   pad=4)
@@ -499,12 +476,8 @@ def fig9_training():
     axB.set_ylim(423, 500)
     axB.set_yticks([440, 460, 480, 500])
     axB.tick_params(axis="y", labelsize=6.2)
-    axB.text(300, 493, "selected checkpoint = per-seed minimum (\u25bc)",
-             fontsize=6.2, color=INK, ha="center", va="center", style="italic")
-    # the early updates of several seeds run above the panel; say so rather than
-    # let a reader read the clipped start as a curve that begins at 500
-    axB.text(590, 497.5, "traces clipped above 500", fontsize=6.2, color=INK,
-             ha="right", va="center", style="italic")
+    # The checkpoint rule and the clipping of the early updates above 500 are
+    # both stated in the caption; the panel itself stays free of text.
     axB.set_ylabel("dev TWT", fontsize=6.9)
     axB.set_xlim(0, 600)
     axB.set_xticks([0, 150, 300, 450, 600])
@@ -551,39 +524,26 @@ def fig10_rolling():
             axA.add_patch(Rectangle((ext[gi], y - 0.28), gaps[gi], 0.56,
                           facecolor=AO_COL, alpha=0.13, edgecolor="none",
                           zorder=1))
-            axA.text((ext[gi] + ext[gi + 1]) / 2, y + 0.32,
-                     "stale plan executes uncorrected",
-                     ha="center", va="bottom", fontsize=6.4, color=INK,
-                     style="italic")
         axA.hlines(y, 0, rec["makespan"], color=AXIS, lw=0.6, zorder=2)
         for tv in t:
             axA.vlines(tv, y - 0.17, y + 0.17, color=col, lw=0.8, zorder=4)
         axA.plot(rec["makespan"], y, marker="|", color=col, markersize=7,
                  markeredgewidth=1.2, zorder=5)
-        wwt_txt = format(int(round(rec["wwt"])), ",")
-        # the label sits just past its OWN lane end when the lane is short,
-        # and right-aligned inside the panel when the lane runs the full
-        # horizon; either way it reads as that lane's outcome.
-        if rec["makespan"] < 0.62 * horizon:
-            lx, lha = rec["makespan"] + horizon * 0.025, "left"
-        else:
-            lx, lha = horizon * 0.95, "right"
-        axA.text(lx, y, f"TWT {wwt_txt}",
-                 ha=lha, va="center", fontsize=7.0, weight="bold",
-                 color=INK, zorder=6,
-                 bbox=dict(boxstyle="round,pad=0.16", fc=SURF, ec="none"))
+        # The lane name is the panel's only text: the shaded span, the instance
+        # this timeline draws and the two episode totals are all named in the
+        # caption, and panel (b) plots the totals.
         axA.text(-horizon * 0.012, y, name, ha="right", va="center",
                  fontsize=6.6, color=INK)
     axA.set_xlim(-horizon * 0.175, horizon)
-    axA.set_ylim(-0.45, 1.80)
+    # the two lanes now sit centred in the panel, the band that carried the
+    # removed annotations having gone with them
+    axA.set_ylim(-0.48, 1.48)
     axA.set_yticks([])
     for sp in ("left",):
         axA.spines[sp].set_visible(False)
     axA.set_xlabel("business hours", fontsize=7.0)
     axA.set_xticks([0, 100, 200, 300])
     axA.tick_params(axis="x", labelsize=6.6)
-    axA.text(0, 1.66, "campus 9 · size 400 · m=0.6 · id 0102",
-             fontsize=6.4, color=INK, ha="left", va="center")
     # The caption is the title; the panel carries only its tag.
     axA.set_title("(a)", loc="left", fontsize=8.0, color=INK,
                   weight="bold", pad=6, x=-0.175)
@@ -593,16 +553,13 @@ def fig10_rolling():
     order = ["0102", "0105", "0107"]
     xa, xp = 0.0, 1.0
     FLOOR = 6.0
-    # Hand-tuned label placement for the v1.1 values (AO 3,560/6,167/458 ->
-    # P 402/10/268): the crossing slope lines, the near-coincident periodic
-    # dots (402 vs 268) and their EDD references force mutually-clear,
-    # per-instance positions (verified collision-free on the render).
-    IDLAB = {"0102": (0.30, "left", 2000.0),  # riding just above its own slope line
-             "0105": (0.0, "center", None), "0107": (0.0, "center", None)}
-    PVAL = {"0102": (0.72, 500.0),      # up-left into the line wedge
-            "0107": (0.80, 165.0),      # down-left, clear of the id-0107 line
-            "0105": (xp - 0.17, None)}
-    EDDVA = {"0102": "bottom", "0107": "top"}  # split the 402/268 EDD notes apart
+    # The instance tags take ONE column, left of the arrival-only dots, each at
+    # its own dot's height: an instance id is a per-line identity no legend can
+    # carry. The two closest episodes stand 0.24 decades apart, wider than a
+    # line of type at this panel height, so no tag has to move off its dot and
+    # none needs a leader. No episode total is printed: the log axis is what
+    # panel (b) is for, and the caption quotes the two the argument turns on.
+    IDGAP = -9.0                       # pt from dot centre to the tag's right edge
     for i, sid in enumerate(order):
         a = by[(sid, "arrival-only")]
         p = by[(sid, "periodic")]
@@ -612,40 +569,24 @@ def fig10_rolling():
                  markeredgecolor=SURF, markeredgewidth=0.7, zorder=5)
         axB.plot(xp, yp, "o", color=ROLL_TEAL, markersize=5.0,
                  markeredgecolor=SURF, markeredgewidth=0.7, zorder=5)
-        # EDD reference tick (dashed) at the periodic column; periodic rolling
-        # lands ON the EDD reference for the non-pathological cases, so only the
-        # tick + a short "EDD" note is drawn (the number is not repeated). The
-        # note sits above (0102) / below (0107) its tick so the two nearly-equal
-        # references never overprint.
-        if ye > 1e-9:
-            axB.plot([xp - 0.14, xp + 0.14], [ye, ye], ls=(0, (2, 1.5)),
-                     color=INK2, lw=0.9, zorder=4)
-            axB.text(xp + 0.19, ye, "EDD", fontsize=6.2, color=INK,
-                     va=EDDVA.get(sid, "center"), ha="left")
-        else:  # EDD == 0: clip to the log floor, annotate honestly
-            axB.plot([xp - 0.14, xp + 0.14], [FLOOR, FLOOR], ls=(0, (2, 1.5)),
-                     color=INK2, lw=0.9, zorder=4)
-            axB.text(xp + 0.19, FLOOR, "EDD 0\n(log floor)", fontsize=6.2,
-                     color=INK, va="center", ha="left", linespacing=0.9)
-        # arrival-only value (left of the grey dot; full digits, matching
-        # panel (a) and the caption macros)
-        axB.text(xa - 0.07, ya, format(int(round(ya)), ","), fontsize=6.5,
-                 color=INK, ha="right", va="center", weight="bold")
-        # periodic value: hand-placed left of the EDD tick, clear of the
-        # crossing lines and of the neighbouring periodic label
-        pvx, pvy = PVAL[sid]
-        axB.text(pvx, yp if pvy is None else pvy, fmt_wwt(yp), fontsize=6.5,
-                 color=INK, ha="right", va="center", weight="bold")
-        # instance tag near the arrival-only dot (or riding its slope line)
-        idx, idha, idy = IDLAB[sid]
-        axB.text(idx, ya * 1.52 if idy is None else idy, f"id {sid}",
-                 fontsize=6.2, color=INK, ha=idha, va="bottom")
+        # EDD reference mark (dashed) at the periodic column; the caption says
+        # what it is, and where EDD scores zero the mark is drawn on the log
+        # floor rather than dropped.
+        axB.plot([xp - 0.14, xp + 0.14],
+                 [ye if ye > 1e-9 else FLOOR] * 2, ls=(0, (2, 1.5)),
+                 color=INK2, lw=0.9, zorder=4)
+        # instance tag, right-aligned a fixed gap left of its own dot
+        axB.annotate(f"id {sid}", xy=(xa, ya), xytext=(IDGAP, 0),
+                     textcoords="offset points", fontsize=6.2, color=INK,
+                     ha="right", va="center", zorder=6)
     axB.set_yscale("log")
     axB.set_ylim(FLOOR * 0.8, 20000)
     axB.yaxis.set_major_locator(mticker.FixedLocator([10, 100, 1000, 10000]))
     axB.yaxis.set_minor_locator(mticker.NullLocator())
     axB.set_yticklabels(["10", "100", "1,000", "10,000"], fontsize=6.6)
-    axB.set_xlim(-0.5, 1.6)
+    # left margin sized to the instance-tag column, right margin to the EDD
+    # marks, which are now the panel's rightmost ink
+    axB.set_xlim(-0.56, 1.30)
     axB.set_xticks([xa, xp])
     axB.set_xticklabels(["arrival\nonly", "periodic"], fontsize=6.6)
     axB.set_ylabel("episode TWT  (log)", fontsize=7.0)

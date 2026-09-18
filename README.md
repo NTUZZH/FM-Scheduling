@@ -1,8 +1,11 @@
 # FM-Scheduling — a benchmark for technician-constrained building-maintenance work-order scheduling
 
 Companion repository for the manuscript *"An Open CMMS-Derived Benchmark for
-Building-Maintenance Work-Order Dispatching: Rules, Optimisation, and
-Learning"* (under peer review).
+Building-Maintenance Work-Order Dispatching with a Decision Map Keyed on Crew
+Utilization"* (under peer review).
+
+Supplemental Materials (Supplemental Texts S1-S7, Tables S1-S14, Figs. S1-S4)
+for the manuscript: [FM-Scheduling_supplemental.pdf](https://github.com/NTUZZH/FM-Scheduling/releases/download/v1.1/FM-Scheduling_supplemental.pdf) (release v1.1 asset).
 
 Preprint (earlier version) can be accessed here: http://dx.doi.org/10.2139/ssrn.7095162
 

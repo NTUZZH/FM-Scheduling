@@ -26,6 +26,7 @@ encoding carries the same information as in-cell text.
   PYTHONPATH=src python scripts/r4_figures.py [f4 fvis f3 f6]
 """
 import json
+import os
 import sys
 import textwrap
 from pathlib import Path
@@ -46,10 +47,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 # ONE house palette: the frozen tokens of the existing figure script.
 from p5_figures import (  # noqa: E402
-    INK, MUTE, GRID, AXIS, SURF, CMAP, figsize, label_ladder, save,
+    INK, MUTE, GRID, AXIS, SURF, CMAP, figsize, save,
 )
 
-FIGDIR = ROOT / "paper" / "figures"
+FIGDIR = Path(os.environ.get("FMWOS_FIGDIR", str(ROOT / "paper" / "figures")))
 ANA_FINAL = ROOT / "results" / "r4_final" / "analysis"
 ANA_ROB = ROOT / "results" / "r4_robustness" / "analysis"
 ANA_VIS = ROOT / "results" / "r4_visibility" / "analysis"
@@ -323,8 +324,6 @@ def fig4_map():
     assert set(gv.u_bin) == set(UBINS) and set(gv.ov_band) == set(OVBANDS)
     cellv = {(r.u_bin, r.ov_band): r for r in gv.itertuples()}
     cella = {(r.u_bin, r.ov_band): r for r in ga.itertuples()}
-    n_weighted = sum(1 for r in cellv.values()
-                     if r.recommended_family == "weighted")
     # cells that name the weighted family only because campus 2 is in them
     campus2_only = [k for k, r in cella.items()
                     if r.recommended_family == "weighted"
@@ -396,29 +395,9 @@ def fig4_map():
                                         linewidth=1.0,
                                         linestyle=(0, (2, 1.4)), zorder=6))
 
-    # The empty band is annotated so it does not read as unfinished, and the
-    # sentence it carries is the panel's finding.
-    runs = []
-    for j in range(len(OVBANDS)):
-        run = []
-        for i in range(len(UBINS)):
-            if (i, j) in blanks:
-                run.append(i)
-            elif run:
-                runs.append((j, run)); run = []
-        if run:
-            runs.append((j, run))
-    j, run = max(runs, key=lambda t: (len(t[1]), -t[0]))
-    assert len(run) >= 2, runs
-    note_a = ("No cell recommends the weighted family" if n_weighted == 0 else
-              f"{n_weighted} of {len(cellv)} cells recommend the weighted "
-              "family")
-    t = axa.text(min(run) + len(run) / 2, j + 0.5,
-                 "\n".join(_wrap(note_a, PT_SMALL, len(run) * cell_w_mm - 1.0)),
-                 ha="center", va="center", fontsize=PT_SMALL, color=INK,
-                 style="italic", linespacing=1.35, zorder=7)
-    reg.append((t, (min(run) + pad, j + pad, len(run) - 2 * pad,
-                    cell_h - 2 * pad), axa))
+    # The empty cells carry the "No configurations" key entry and nothing else:
+    # which families the grid does and does not recommend is a reading of the
+    # cells themselves, so the panel states it in no separate sentence.
 
     axa.set_xticks([i + 0.5 for i in range(len(UBINS))])
     axa.set_xticklabels([_band_label(b) for b in UBINS], fontsize=PT_BODY)
@@ -509,7 +488,7 @@ def fig4_map():
 
     # ---- axis labels, panel tags -------------------------------------------
     fig.text((A_X0 + A_W / 2) / W, (AX_BOT - 8.2) / H_MM,
-             "Realised utilisation of the crews, u", ha="center", va="bottom",
+             "Realized utilization of the crews, u", ha="center", va="bottom",
              fontsize=PT_BODY, color=INK)
     fig.text((A_X0 - 13.4) / W, (AX_BOT + AX_TOP) / 2 / H_MM,
              "Share of workload in overloaded trades", ha="center",
@@ -662,7 +641,8 @@ def figvis_effects():
     V_EBOT, V_EH = 12.8, 12.8     # empirical strip: its own axis label and
     #                              the key both sit under it, which needs
     #                              about 12.5 mm of clear band
-    V_GUT = 24.0                  # right-hand gutter for its direct labels
+    V_GUT = 0.0                   # no label gutter: the strip runs the full
+    #                              width of the generator block above it
 
     fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, HV))
 
@@ -700,7 +680,7 @@ def figvis_effects():
     for j, ut in enumerate(uts):
         fig.text((V_L + j * (V_PW + V_WGAP) + V_PW / 2) / TEXTWIDTH_MM,
                  (V_ROW_TOP[0] + V_PH + 1.2) / HV,
-                 f"target utilisation {ut:g}", ha="center", va="bottom",
+                 f"target utilization {ut:g}", ha="center", va="bottom",
                  fontsize=7.0, color=INK)
     for i, pm in enumerate(pms):
         fig.text(10.4 / TEXTWIDTH_MM, (V_ROW_TOP[i] + V_PH / 2) / HV,
@@ -708,30 +688,17 @@ def figvis_effects():
                  rotation=90, fontsize=7.0, color=INK)
 
     # ---- empirical strip ---------------------------------------------------
-    # The strip keeps a right-hand gutter for the three direct labels, because
-    # its own y scale is an order of magnitude smaller than the generator
-    # panels' and two of its three lines sit on top of each other at zero.
+    # The strip carries no direct labels: the key underneath names all three
+    # arms, and its own y scale is an order of magnitude smaller than the
+    # generator panels', so it keeps its own axis and its own scale note.
     axe = fig.add_axes(vfrac(V_L, V_EBOT, V_R - V_L - V_GUT, V_EH))
-    ends = _vis_panel(axe, vis, "emp|ALL", VIS_ARMS)
+    _vis_panel(axe, vis, "emp|ALL", VIS_ARMS)
     axe.set_yticks([0.0, 0.5, 1.0, 1.5])
     axe.tick_params(axis="y", labelsize=6.2)
     axe.set_ylabel("(smaller scale)", fontsize=6.2, color=INK, style="italic",
                    labelpad=2)
     axe.set_xlabel("Preventive-work notice L  (business hours before release; "
                    "“full” = the whole horizon)", fontsize=7.0, labelpad=3)
-
-    # direct labels at the right end: the redundant channel for every hue, with
-    # the least-displacement ladder keeping the two near-zero lines apart
-    lo_e, hi_e = axe.get_ylim()
-    panel_pt = V_EH * MM * 72.0
-    sep = 7.6 / panel_pt * (hi_e - lo_e)
-    ends.sort(key=lambda t: t[2])
-    ladder = label_ladder([e[2] for e in ends], sep)
-    for (tag, xe, ye, col), ly in zip(ends, ladder):
-        axe.plot([xe + 0.06, xe + 0.30], [ye, ly], color=col, lw=0.5,
-                 zorder=6, clip_on=False)
-        axe.text(xe + 0.34, ly, tag, ha="left", va="center", fontsize=6.2,
-                 color=INK, clip_on=False)
 
     fig.text(V_L / TEXTWIDTH_MM, (V_ROW_TOP[0] + V_PH + 6.0) / HV,
              "Generator cells", ha="left", va="center",
@@ -788,11 +755,13 @@ def fig3_curves():
     g["u"] = g.scope.str.replace("u_target=", "", regex=False).astype(float)
     us = sorted(g.u.unique())
 
-    # Print-true geometry, in millimetres on the page: axes band, then the
-    # right-hand label gutter, then the axis label and the key underneath.
-    H3 = 78.0
-    C_X0, C_W = 24.5, 110.0
-    C_BOT, C_H = 15.0, 60.0
+    # Print-true geometry, in millimetres on the page: the axes band, then the
+    # axis label and the two key rows underneath. Every series is named in the
+    # key, so the panel needs no right-hand label gutter and runs to the text
+    # width; the two key rows are what the extra height below the axes buys.
+    H3 = 84.0
+    C_X0, C_W = 24.5, 130.0
+    C_BOT, C_H = 21.0, 60.0
     fig = plt.figure(figsize=figsize(TEXTWIDTH_MM, H3))
     ax = fig.add_axes([C_X0 / TEXTWIDTH_MM, C_BOT / H3,
                        C_W / TEXTWIDTH_MM, C_H / H3])
@@ -820,6 +789,8 @@ def fig3_curves():
                 zorder=5)
 
     ax.set_yscale("log")
+    # right limit a hair past the overload band's edge at u = 1.36, so the band
+    # closes inside the panel instead of running off it
     ax.set_xlim(0.63, 1.37)
     ax.set_xticks(us)
     ax.set_xticklabels([f"{u:g}" for u in us], fontsize=6.4)
@@ -828,56 +799,23 @@ def fig3_curves():
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(
         lambda v, p: f"{v / 1000:,.0f}k"))
     ax.set_yticks([2000, 5000, 10000, 20000, 50000, 100000, 200000])
-    ax.set_xlabel("Target utilisation  u", fontsize=7.2, labelpad=3)
+    ax.set_xlabel("Target utilization  u", fontsize=7.2, labelpad=3)
     ax.set_ylabel("Mean total weighted tardiness  (log scale)", fontsize=7.2)
     ax.grid(axis="y", which="major", color=GRID, linewidth=0.4)
     ax.tick_params(axis="y", labelsize=6.4)
 
-    # direct labels at the right end (the redundant channel for every hue)
-    ends = []
-    for m, lab, col, ls, lw, _ in F3_SERIES:
-        d = g[g.method == m].sort_values("u")
-        ends.append((lab, float(d["mean"].iloc[-1]), col))
-    ends.append(("Policy pool", float(pool.pooled_mean.iloc[-1]), CMAP["policy"]))
-    ends.sort(key=lambda t: t[1])
-    # Minimum gap between label centres, derived from the panel geometry rather
-    # than guessed in decades: 3.0 mm on the page at the 6.4 pt label size, so
-    # the ladder cannot tighten when the panel height changes.
-    _y0, _y1 = ax.get_ylim()
-    sep_dec = 3.0 / C_H * np.log10(_y1 / _y0)
-    ypos = {}
-    prev = None
-    for lab, y, col in ends:
-        yy = y
-        if prev is not None and np.log10(yy) - np.log10(prev) < sep_dec:
-            yy = 10 ** (np.log10(prev) + sep_dec)
-        ypos[lab] = yy
-        prev = yy
-    # The connectors are thin grey and start clear of the last data point, so
-    # they read as leaders to a label and never as a continuation of the curve.
-    for lab, y, col in ends:
-        ax.plot([1.313, 1.348], [y, ypos[lab]], color=MUTE, lw=0.35, zorder=4,
-                clip_on=False)
-        ax.text(1.358, ypos[lab], lab, ha="left", va="center", fontsize=6.4,
-                color=INK, clip_on=False)
-
-    ax.text(1.18, 2.35e5, "overload\nu > 1", ha="center", va="top",
-            fontsize=6.2, color=INK, style="italic")
-    # the diagnostic floors, stated as a ratio to the EDD mean at the top load
-    # (the fixed family-level reference; a scope-best ratio would lean on a
-    # single lucky training seed)
-    top_u = max(us)
-    edd_mean = g[(g.method == "edd") & (g.u == top_u)]["mean"].iloc[0]
-    for m in ("lpt", "random"):
-        r = g[(g.method == m) & (g.u == top_u)]["mean"].iloc[0] / edd_mean
-        ax.text(1.358, ypos[dict(lpt="LPT", random="Random")[m]] * 0.66,
-                f"{r:.1f}× the EDD mean\nat u = {top_u:g}", ha="left", va="center",
-                fontsize=6.2, color=INK, style="italic", clip_on=False,
-                linespacing=1.35)
-
+    # The key carries every encoding, and the panel carries no text at all.
+    # Each rule's swatch is drawn from the same colour, dash pattern, width and
+    # marker as its plotted line, so a reader matches a curve to its name by
+    # comparing the two directly.
+    rule_handles = [
+        Line2D([0], [0], color=col, ls=ls, lw=lw, marker="o", markersize=2.6,
+               markeredgecolor=SURF, markeredgewidth=0.35, label=lab)
+        for _, lab, col, ls, lw, _ in F3_SERIES
+    ]
     # The pool swatch matches the plotted line exactly: solid, with the marker
     # edge at its plotted width, so the handle cannot read as a dashed line.
-    handles = [
+    pool_handles = [
         Line2D([0], [0], color=CMAP["policy"], lw=1.3, ls="-", marker="o",
                markersize=3.2, markeredgecolor=SURF, markeredgewidth=0.4,
                label="Policy pool: mean of ten seeds"),
@@ -886,9 +824,16 @@ def fig3_curves():
         Patch(facecolor=MUTE, alpha=0.22, edgecolor="none",
               label="95% cluster-bootstrap interval"),
     ]
-    # centred on the plotted panel, immediately under its axis label
-    fig.legend(handles=handles, loc="lower center",
-               bbox_to_anchor=((C_X0 + C_W / 2) / TEXTWIDTH_MM, 1.2 / H3),
+    # Two rows, each centred on the plotted panel: the six dispatching rules in
+    # the order they are drawn, then the policy pool and the two bands. Heights
+    # are millimetres from the figure bottom.
+    LEG_TOP_ROW, LEG_BOT_ROW = 6.2, 1.2
+    CX_MID = (C_X0 + C_W / 2) / TEXTWIDTH_MM
+    fig.legend(handles=rule_handles, loc="lower center",
+               bbox_to_anchor=(CX_MID, LEG_TOP_ROW / H3),
+               ncol=6, fontsize=6.4, frameon=False, handlelength=2.6)
+    fig.legend(handles=pool_handles, loc="lower center",
+               bbox_to_anchor=(CX_MID, LEG_BOT_ROW / H3),
                ncol=3, fontsize=6.4, frameon=False, handlelength=2.6)
     save(fig, "f3_curves")
 
@@ -901,8 +846,8 @@ def fig3_curves():
 # ===========================================================================
 # F6  robustness stability matrix
 # ===========================================================================
-F6_ROWS = [("pmodel", "max", "Processing time: dominant labour line"),
-           ("pmodel", "single", "Processing time: single labour line"),
+F6_ROWS = [("pmodel", "max", "Processing time: dominant labor line"),
+           ("pmodel", "single", "Processing time: single labor line"),
            ("capacity", "q0.90", "Capacity sized at p90 of weekly hours"),
            ("capacity", "q0.75", "Capacity sized at p75 of weekly hours"),
            ("backdate", "backdate", "Backdated corrective releases"),
