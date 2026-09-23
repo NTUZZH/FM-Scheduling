@@ -1,4 +1,4 @@
-# FM-Scheduling — FM-DispatchBench, an open CMMS-derived benchmark for building-maintenance work-order dispatching
+# FM-DispatchBench, an open CMMS-derived benchmark for building-maintenance work-order dispatching
 
 Companion repository for the manuscript *"An Open CMMS-Derived Benchmark for
 Building-Maintenance Work-Order Dispatching with a Decision Map Keyed on Crew
